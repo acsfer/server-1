@@ -1590,7 +1590,6 @@ public:
   uint decimal_precision() const;
   table_map not_null_tables() const { return 0; }
   const char *func_name() const { return "case"; }
-  enum precedence precedence() const { return BETWEEN_PRECEDENCE; }
   virtual void print(String *str, enum_query_type query_type);
   Item *find_item(String *str);
   CHARSET_INFO *compare_collation() const { return cmp_collation.collation; }
