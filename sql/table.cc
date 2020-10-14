@@ -4720,7 +4720,8 @@ void update_create_info_from_table(HA_CREATE_INFO *create_info, TABLE *table)
 }
 
 int
-rename_file_ext(const char * from,const char * to,const char * ext)
+rename_file_ext(const char * from,const char * to,const char *ext)
+
 {
   char from_b[FN_REFLEN],to_b[FN_REFLEN];
   (void) strxmov(from_b,from,ext,NullS);

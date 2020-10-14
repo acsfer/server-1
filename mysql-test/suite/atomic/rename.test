@@ -1,0 +1,6 @@
+--source include/have_debug.inc
+--source include/have_innodb.inc
+--source include/have_csv.inc
+
+engines="myisam,aria,innodb,csv'
+crashpoints=0;
