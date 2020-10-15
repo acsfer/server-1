@@ -5490,7 +5490,15 @@ btr_cur_optimistic_delete_func(
 
 	rec = btr_cur_get_rec(cursor);
 
-	if (UNIV_UNLIKELY(block->page.id.page_no() == cursor->index->page
+	offsets = rec_get_offsets(rec, cursor->index, offsets, true,
+				  ULINT_UNDEFINED, &heap);
+
+	no_compress_needed = !rec_offs_any_extern(offsets)
+		&& btr_cur_can_delete_without_compress(
+			cursor, rec_offs_size(offsets), mtr);
+
+	if (UNIV_UNLIKELY(no_compress_needed
+			  && block->page.id.page_no() == cursor->index->page
 			  && page_get_n_recs(block->frame) == 1
 			  + (cursor->index->is_instant()
 			     && !rec_is_metadata(rec, cursor->index)))) {
@@ -5530,13 +5538,6 @@ btr_cur_optimistic_delete_func(
 
 		return true;
 	}
-
-	offsets = rec_get_offsets(rec, cursor->index, offsets, true,
-				  ULINT_UNDEFINED, &heap);
-
-	no_compress_needed = !rec_offs_any_extern(offsets)
-		&& btr_cur_can_delete_without_compress(
-			cursor, rec_offs_size(offsets), mtr);
 
 	if (no_compress_needed) {
 
