@@ -2923,7 +2923,9 @@ static bool send_show_master_info_data(THD *thd, Master_info *mi, bool full,
     protocol->store(mi->rli.last_error().message, &my_charset_bin);
     protocol->store((uint32) mi->rli.slave_skip_counter);
     protocol->store((ulonglong) mi->rli.group_master_log_pos);
-    protocol->store((ulonglong) mi->rli.log_space_total);
+    protocol->store((uint64)
+                     my_atomic_load64_explicit(&mi->rli.log_space_total,
+                                               MY_MEMORY_ORDER_RELAXED));
 
     protocol->store(
       mi->rli.until_condition==Relay_log_info::UNTIL_NONE ? "None":
@@ -4623,7 +4625,8 @@ Stopping slave I/O thread due to out-of-memory error from master");
 #endif
 
       if (rli->log_space_limit && rli->log_space_limit <
-          rli->log_space_total &&
+          (uint64) my_atomic_load64_explicit(&rli->log_space_total,
+                                             MY_MEMORY_ORDER_RELAXED) &&
           !rli->ignore_log_space_limit)
         if (wait_for_relay_log_space(rli))
         {
@@ -7222,7 +7225,9 @@ static Log_event* next_event(rpl_group_info *rgi, ulonglong *event_size)
              is are able to rotate and purge sometime soon.
          */
         if (rli->log_space_limit && 
-            rli->log_space_limit < rli->log_space_total)
+            rli->log_space_limit <
+            (uint64) my_atomic_load64_explicit(&rli->log_space_total,
+                                               MY_MEMORY_ORDER_RELAXED))
         {
           /* force rotation if not in an unfinished group */
           rli->sql_force_rotate_relay= !rli->is_in_group();
