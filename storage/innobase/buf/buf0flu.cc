@@ -1548,7 +1548,8 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
 
   mysql_mutex_lock(&buf_pool.flush_list_mutex);
 
-  if (UNIV_UNLIKELY(!buf_page_cleaner_is_active))
+  if (UNIV_UNLIKELY(!buf_page_cleaner_is_active)
+      ut_d(|| innodb_page_cleaner_disabled_debug))
   {
     for (;;)
     {
