@@ -77,29 +77,14 @@ static std::atomic<lsn_t> buf_flush_sync_lsn;
 mysql_pfs_key_t page_cleaner_thread_key;
 #endif /* UNIV_PFS_THREAD */
 
-/** Page cleaner request state for buf_pool */
-struct page_cleaner_slot_t {
-	ulint			n_flushed_list;
-					/*!< number of flushed pages
-					by flush_list flushing */
-	ulint			flush_list_time;
-					/*!< elapsed time for flush_list
-					flushing */
-	ulint			flush_list_pass;
-					/*!< count to attempt flush_list
-					flushing */
-};
-
 /** Page cleaner structure */
-struct page_cleaner_t {
-	ulint			flush_time;	/*!< elapsed time to flush
-						requests for all slots */
-	ulint			flush_pass;	/*!< count to finish to flush
-						requests for all slots */
-	page_cleaner_slot_t	slot;
-};
-
-static page_cleaner_t	page_cleaner;
+static struct
+{
+  /** total elapsed time in adaptive flushing, in seconds */
+  ulint flush_time;
+  /** number of adaptive flushing passes */
+  ulint flush_pass;
+} page_cleaner;
 
 #ifdef UNIV_DEBUG
 my_bool innodb_page_cleaner_disabled_debug;
@@ -1775,37 +1760,12 @@ page_cleaner_flush_pages_recommendation(ulint last_pages_in)
 		page_cleaner.flush_time = 0;
 		page_cleaner.flush_pass = 0;
 
-		ulint	list_tm = page_cleaner.slot.flush_list_time;
-		ulint	list_pass = page_cleaner.slot.flush_list_pass;
-		page_cleaner.slot.flush_list_time = 0;
-		page_cleaner.slot.flush_list_pass = 0;
-
-		/* minimum values are 1, to avoid dividing by zero. */
-		if (list_tm < 1) {
-			list_tm = 1;
-		}
-		if (flush_tm < 1) {
-			flush_tm = 1;
+		if (flush_pass) {
+			flush_tm /= flush_pass;
 		}
 
-		if (list_pass < 1) {
-			list_pass = 1;
-		}
-		if (flush_pass < 1) {
-			flush_pass = 1;
-		}
-
-		MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME_SLOT,
-			    list_tm / list_pass);
-
-		MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME_THREAD,
-			    list_tm / flush_pass);
-		MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME_EST,
-			    flush_tm / flush_pass);
-		MONITOR_SET(MONITOR_FLUSH_AVG_TIME, flush_tm / flush_pass);
-
-		MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_PASS, list_pass);
-		MONITOR_SET(MONITOR_FLUSH_AVG_PASS, flush_pass);
+		MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_TIME, flush_tm);
+		MONITOR_SET(MONITOR_FLUSH_ADAPTIVE_AVG_PASS, flush_pass);
 
 		prev_lsn = cur_lsn;
 		prev_time = curr_time;
@@ -1871,22 +1831,6 @@ page_cleaner_flush_pages_recommendation(ulint last_pages_in)
 	return(n_pages);
 }
 
-/** Initiate a flushing batch.
-@param max_n    maximum mumber of blocks flushed
-@param lsn      oldest_modification limit
-@return ut_time_ms() at the start of the wait */
-static ulint pc_request_flush_slot(ulint max_n, lsn_t lsn)
-{
-  ut_ad(max_n);
-  ut_ad(lsn);
-
-  const ulint flush_start_tm= ut_time_ms();
-  page_cleaner.slot.n_flushed_list= buf_flush_lists(max_n, lsn);
-  page_cleaner.slot.flush_list_time+= ut_time_ms() - flush_start_tm;
-  page_cleaner.slot.flush_list_pass++;
-  return flush_start_tm;
-}
-
 /** Conduct checkpoint-related flushing for innodb_flush_sync=ON,
 and try to initiate checkpoints until the target is met.
 @param lsn   minimum value of buf_pool.get_oldest_modification(LSN_MAX)
@@ -1897,8 +1841,7 @@ ATTRIBUTE_COLD static ulint buf_flush_sync_for_checkpoint(lsn_t lsn)
 
   for (ulint n_flushed= 0;;)
   {
-    pc_request_flush_slot(ULINT_UNDEFINED, lsn);
-    n_flushed+= page_cleaner.slot.n_flushed_list;
+    n_flushed+= buf_flush_lists(ULINT_UNDEFINED, lsn);
 
     /* Attempt to perform a log checkpoint upon completing each batch. */
     if (recv_recovery_is_on())
@@ -2070,16 +2013,12 @@ furious_flush:
 		} else if (!srv_check_activity(&last_activity)) {
 			/* no activity, but woken up by event */
 			n_flushed = 0;
-		} else if (ulint n= srv_adaptive_flushing
+		} else if (ulint n = srv_adaptive_flushing
 			   ? page_cleaner_flush_pages_recommendation(last_pages)
 			   : srv_io_capacity) {
-			/* Estimate pages from flush_list to be flushed */
-			ulint tm= pc_request_flush_slot(n, LSN_MAX);
-
+			const ulint tm = ut_time_ms();
+			n_flushed = buf_flush_lists(n, LSN_MAX);
 			page_cleaner.flush_time += ut_time_ms() - tm;
-			page_cleaner.flush_pass++ ;
-
-			n_flushed = page_cleaner.slot.n_flushed_list;
 
 			if (n_flushed) {
 				MONITOR_INC_VALUE_CUMULATIVE(

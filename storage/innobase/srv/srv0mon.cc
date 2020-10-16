@@ -381,35 +381,15 @@ static monitor_info_t	innodb_counter_info[] =
 	 MONITOR_NONE,
 	 MONITOR_DEFAULT_START, MONITOR_FLUSH_N_TO_FLUSH_BY_AGE},
 
-	{"buffer_flush_adaptive_avg_time_slot", "buffer",
-	 "Avg time (ms) spent for adaptive flushing recently per slot.",
+	{"buffer_flush_adaptive_avg_time", "buffer",
+	 "Avg time (ms) spent for adaptive flushing recently.",
 	 MONITOR_NONE,
-	 MONITOR_DEFAULT_START, MONITOR_FLUSH_ADAPTIVE_AVG_TIME_SLOT},
-
-	{"buffer_flush_adaptive_avg_time_thread", "buffer",
-	 "Avg time (ms) spent for adaptive flushing recently per thread.",
-	 MONITOR_NONE,
-	 MONITOR_DEFAULT_START, MONITOR_FLUSH_ADAPTIVE_AVG_TIME_THREAD},
-
-	{"buffer_flush_adaptive_avg_time_est", "buffer",
-	 "Estimated time (ms) spent for adaptive flushing recently.",
-	 MONITOR_NONE,
-	 MONITOR_DEFAULT_START, MONITOR_FLUSH_ADAPTIVE_AVG_TIME_EST},
-
-	{"buffer_flush_avg_time", "buffer",
-	 "Avg time (ms) spent for flushing recently.",
-	 MONITOR_NONE,
-	 MONITOR_DEFAULT_START, MONITOR_FLUSH_AVG_TIME},
+	 MONITOR_DEFAULT_START, MONITOR_FLUSH_ADAPTIVE_AVG_TIME},
 
 	{"buffer_flush_adaptive_avg_pass", "buffer",
 	 "Number of adaptive flushes passed during the recent Avg period.",
 	 MONITOR_NONE,
 	 MONITOR_DEFAULT_START, MONITOR_FLUSH_ADAPTIVE_AVG_PASS},
-
-	{"buffer_flush_avg_pass", "buffer",
-	 "Number of flushes passed during the recent Avg period.",
-	 MONITOR_NONE,
-	 MONITOR_DEFAULT_START, MONITOR_FLUSH_AVG_PASS},
 
 	{"buffer_LRU_get_free_loops", "buffer",
 	 "Total loops in LRU get free.",
