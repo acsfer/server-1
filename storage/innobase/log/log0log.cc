@@ -68,9 +68,6 @@ old */
 static bool	log_has_printed_chkp_warning = false;
 static time_t	log_last_warning_time;
 
-static bool	log_has_printed_chkp_margine_warning = false;
-static time_t	log_last_margine_warning_time;
-
 /* A margin for free space in the log buffer before a log entry is catenated */
 #define LOG_BUF_WRITE_MARGIN	(4 * OS_FILE_LOG_BLOCK_SIZE)
 
@@ -141,86 +138,6 @@ void log_buffer_extend(ulong len)
 
 	ib::info() << "innodb_log_buffer_size was extended to "
 		<< new_buf_size << ".";
-}
-
-/** Calculate actual length in redo buffer and file including
-block header and trailer.
-@param[in]	len	length to write
-@return actual length to write including header and trailer. */
-static inline
-ulint
-log_calculate_actual_len(
-	ulint len)
-{
-	ut_ad(log_mutex_own());
-
-	const ulint	framing_size = log_sys.framing_size();
-	/* actual length stored per block */
-	const ulint	len_per_blk = OS_FILE_LOG_BLOCK_SIZE - framing_size;
-
-	/* actual data length in last block already written */
-	ulint	extra_len = (log_sys.buf_free % OS_FILE_LOG_BLOCK_SIZE);
-
-	ut_ad(extra_len >= LOG_BLOCK_HDR_SIZE);
-	extra_len -= LOG_BLOCK_HDR_SIZE;
-
-	/* total extra length for block header and trailer */
-	extra_len = ((len + extra_len) / len_per_blk) * framing_size;
-
-	return(len + extra_len);
-}
-
-/** Check margin not to overwrite transaction log from the last checkpoint.
-If would estimate the log write to exceed the log_capacity,
-waits for the checkpoint is done enough.
-@param[in]	len	length of the data to be written */
-
-void
-log_margin_checkpoint_age(
-	ulint	len)
-{
-	ulint	margin = log_calculate_actual_len(len);
-
-	ut_ad(log_mutex_own());
-
-	if (margin > log_sys.log_capacity) {
-		/* return with warning output to avoid deadlock */
-		if (!log_has_printed_chkp_margine_warning
-		    || difftime(time(NULL),
-				log_last_margine_warning_time) > 15) {
-			log_has_printed_chkp_margine_warning = true;
-			log_last_margine_warning_time = time(NULL);
-
-			ib::error() << "The transaction log file is too"
-				" small for the single transaction log (size="
-				<< len << "). So, the last checkpoint age"
-				" might exceed the log capacity "
-				<< log_sys.log_capacity << ".";
-		}
-
-		return;
-	}
-
-	/* Our margin check should ensure that we never reach this condition.
-	Try to do checkpoint once. We cannot keep waiting here as it might
-	result in hang in case the current mtr has latch on oldest lsn */
-	const lsn_t checkpoint_lsn = log_sys.last_checkpoint_lsn;
-	const lsn_t lsn = log_sys.get_lsn();
-
-	if (UNIV_UNLIKELY(lsn + margin
-			  > checkpoint_lsn + log_sys.log_capacity)) {
-		log_sys.set_check_flush_or_checkpoint();
-		log_mutex_exit();
-
-		DEBUG_SYNC_C("margin_checkpoint_age_rescue");
-
-		buf_flush_wait_flushed(checkpoint_lsn, lsn);
-		log_checkpoint();
-
-		log_mutex_enter();
-	}
-
-	return;
 }
 
 /** Open the log for log_write_low. The log must be closed with log_close.
@@ -1357,14 +1274,10 @@ ATTRIBUTE_COLD static void log_checkpoint_margin()
     log_sys.set_check_flush_or_checkpoint(false);
   log_mutex_exit();
 
-  if (lsn > async_checkpoint_lsn)
-  {
-    if (lsn > sync_checkpoint_lsn)
-      buf_flush_wait_flushed(sync_checkpoint_lsn, lsn);
-    else
-      buf_flush_ahead(async_checkpoint_lsn);
-    log_checkpoint();
-  }
+  if (lsn > sync_checkpoint_lsn)
+    buf_flush_wait_flushed(sync_checkpoint_lsn, lsn);
+  else if (lsn > async_checkpoint_lsn)
+    buf_flush_ahead(async_checkpoint_lsn);
 }
 
 /**

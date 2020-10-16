@@ -1549,6 +1549,7 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
 
   mysql_mutex_lock(&buf_pool.flush_list_mutex);
 
+#if 1 /* FIXME: remove this, and guarantee that the page cleaner serves us */
   if (UNIV_UNLIKELY(!buf_page_cleaner_is_active)
       ut_d(|| innodb_page_cleaner_disabled_debug))
   {
@@ -1565,6 +1566,7 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
         MONITOR_INC_VALUE_CUMULATIVE(MONITOR_FLUSH_SYNC_TOTAL_PAGE,
                                      MONITOR_FLUSH_SYNC_COUNT,
                                      MONITOR_FLUSH_SYNC_PAGES, n_pages);
+        log_checkpoint();
       }
       MONITOR_INC(MONITOR_FLUSH_SYNC_WAITS);
       mysql_mutex_lock(&buf_pool.flush_list_mutex);
@@ -1572,6 +1574,7 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
     return;
   }
   else if (UNIV_LIKELY(srv_flush_sync))
+#endif
   {
     if (buf_flush_sync_lsn < async_lsn)
     {

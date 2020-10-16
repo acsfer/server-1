@@ -624,6 +624,55 @@ mtr_t::release_page(const void* ptr, mtr_memo_type_t type)
 	ut_ad(0);
 }
 
+static bool log_margin_warned;
+static time_t log_margin_warn_time;
+
+/** Check margin not to overwrite transaction log from the last checkpoint.
+If would estimate the log write to exceed the log_capacity,
+waits for the checkpoint is done enough.
+@param len   length of the data to be written */
+static void log_margin_checkpoint_age(ulint len)
+{
+  const ulint framing_size= log_sys.framing_size();
+  /* actual length stored per block */
+  const ulint len_per_blk= OS_FILE_LOG_BLOCK_SIZE - framing_size;
+
+  /* actual data length in last block already written */
+  ulint extra_len= log_sys.buf_free % OS_FILE_LOG_BLOCK_SIZE;
+
+  ut_ad(extra_len >= LOG_BLOCK_HDR_SIZE);
+  extra_len-= LOG_BLOCK_HDR_SIZE;
+
+  /* total extra length for block header and trailer */
+  extra_len= ((len + extra_len) / len_per_blk) * framing_size;
+
+  const ulint margin= len + extra_len;
+
+  ut_ad(log_mutex_own());
+
+  const lsn_t lsn= log_sys.get_lsn();
+
+  if (UNIV_UNLIKELY(margin > log_sys.log_capacity))
+  {
+    time_t t= time(nullptr);
+
+    /* return with warning output to avoid deadlock */
+    if (!log_margin_warned || difftime(t, log_margin_warn_time) > 15)
+    {
+      log_margin_warned= true;
+      log_margin_warn_time= t;
+
+      ib::error() << "innodb_log_file_size is too small "
+                     "for mini-transaction size " << len;
+    }
+  }
+  else if (UNIV_LIKELY(lsn + margin <= log_sys.last_checkpoint_lsn +
+                       log_sys.log_capacity))
+    return;
+
+  log_sys.set_check_flush_or_checkpoint();
+}
+
 /** Prepare to write the mini-transaction log to the redo log buffer.
 @return number of bytes to write in finish_write() */
 inline ulint mtr_t::prepare_write()

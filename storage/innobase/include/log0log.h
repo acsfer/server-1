@@ -88,15 +88,6 @@ log_free_check(void);
 @param[in]	len	requested minimum size in bytes */
 void log_buffer_extend(ulong len);
 
-/** Check margin not to overwrite transaction log from the last checkpoint.
-If would estimate the log write to exceed the log_capacity,
-waits for the checkpoint is done enough.
-@param[in]	len	length of the data to be written */
-
-void
-log_margin_checkpoint_age(
-	ulint	len);
-
 /** Open the log for log_write_low. The log must be closed with log_close.
 @param[in]	len	length of the data to be written
 @return start lsn of the log record */
