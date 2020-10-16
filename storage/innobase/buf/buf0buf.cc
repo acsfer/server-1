@@ -3027,12 +3027,13 @@ buf_page_get_low(
 		break;
 	default:
 		ut_error;
+	case BUF_GET_POSSIBLY_FREED:
+		break;
 	case BUF_GET_NO_LATCH:
 		ut_ad(rw_latch == RW_NO_LATCH);
 		/* fall through */
 	case BUF_GET:
 	case BUF_GET_IF_IN_POOL_OR_WATCH:
-	case BUF_GET_POSSIBLY_FREED:
 		fil_space_t* s = fil_space_get(page_id.space());
 		ut_ad(s);
 		ut_ad(s->zip_size() == zip_size);
