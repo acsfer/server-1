@@ -3399,19 +3399,6 @@ xb_load_tablespaces()
 }
 
 /************************************************************************
-Initialize the tablespace memory cache and populate it by scanning for and
-opening data files.
-@returns DB_SUCCESS or error code.*/
-static
-dberr_t
-xb_data_files_init()
-{
-	xb_fil_io_init();
-
-	return(xb_load_tablespaces());
-}
-
-/************************************************************************
 Destroy the tablespace memory cache. */
 static
 void
@@ -4603,6 +4590,22 @@ xb_delta_open_matching_space(
 		return file;
 	}
 
+	if (!info.space_id && fil_system.sys_space) {
+		fil_node_t *node
+			= UT_LIST_GET_FIRST(fil_system.sys_space->chain);
+		for (; node; node = UT_LIST_GET_NEXT(chain, node)) {
+			if (!strcmp(node->name, real_name)) {
+				break;
+			}
+		}
+		if (node && node->handle != OS_FILE_CLOSED) {
+			*success = true;
+			return node->handle;
+		}
+		msg("mariabackup: Cannot find file %s\n", real_name);
+		return OS_FILE_CLOSED;
+	}
+
 	log_mutex_enter();
 	if (!fil_is_user_tablespace_id(info.space_id)) {
 found:
@@ -4921,7 +4924,7 @@ xtrabackup_apply_delta(
 		os_file_close(src_file);
 		os_file_delete(0,src_path);
 	}
-	if (dst_file != OS_FILE_CLOSED)
+	if (dst_file != OS_FILE_CLOSED && info.space_id)
 		os_file_close(dst_file);
 	return TRUE;
 
@@ -4929,7 +4932,7 @@ error:
 	aligned_free(incremental_buffer);
 	if (src_file != OS_FILE_CLOSED)
 		os_file_close(src_file);
-	if (dst_file != OS_FILE_CLOSED)
+	if (dst_file != OS_FILE_CLOSED && info.space_id)
 		os_file_close(dst_file);
 	msg("Error: xtrabackup_apply_delta(): "
 	    "failed to apply %s to %s.\n", src_path, dst_path);
@@ -5383,8 +5386,8 @@ static bool xtrabackup_prepare_func(char** argv)
 		srv_allow_writes_event = os_event_create(0);
 		os_event_set(srv_allow_writes_event);
 #endif
-		dberr_t err = xb_data_files_init();
-		if (err != DB_SUCCESS) {
+		xb_fil_io_init();
+		if (dberr_t err = xb_load_tablespaces()) {
 			msg("mariabackup: error: xb_data_files_init() failed "
 			    "with error %s\n", ut_strerr(err));
 			goto error_cleanup;
@@ -5392,7 +5395,8 @@ static bool xtrabackup_prepare_func(char** argv)
 
 		inc_dir_tables_hash.create(1000);
 
-		ok = xtrabackup_apply_deltas();
+		ok = fil_system.sys_space->open(false)
+			&& xtrabackup_apply_deltas();
 
 		xb_data_files_close();
 
