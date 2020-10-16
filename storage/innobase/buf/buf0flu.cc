@@ -1998,7 +1998,7 @@ furious_flush:
 			sleep_timeout = true;
 		}
 
-		if (sleep_timeout) {
+		if (sleep_timeout || !srv_adaptive_flushing) {
 			/* no activity, slept enough */
 			n_flushed = buf_flush_lists(srv_io_capacity, LSN_MAX);
 			last_pages = n_flushed;
@@ -2010,13 +2010,31 @@ furious_flush:
 					MONITOR_FLUSH_BACKGROUND_PAGES,
 					n_flushed);
 
+				/* The periodic log_checkpoint() call here
+				makes it harder to reproduce bugs in crash
+				recovery or mariabackup --prepare, or in code
+				that writes the redo log records. Omitting the
+				call here should not affect correctness,
+				because log_free_check() should still be
+				invoking checkpoints when needed. */
+				DBUG_EXECUTE_IF("ib_log_checkpoint_avoid",
+						continue;);
+
+				/* FIXME: do this only if at least N
+				seconds elapsed since the last checkpoint,
+				and remove the checkpoint calls from the
+				master task. Also do this on adaptive
+				flushing. */
+				if (!recv_recovery_is_on()
+				    && srv_operation == SRV_OPERATION_NORMAL) {
+					log_checkpoint();
+				}
 			}
 		} else if (!srv_check_activity(&last_activity)) {
 			/* no activity, but woken up by event */
 			n_flushed = 0;
-		} else if (ulint n = srv_adaptive_flushing
-			   ? page_cleaner_flush_pages_recommendation(last_pages)
-			   : srv_io_capacity) {
+		} else if (ulint n = page_cleaner_flush_pages_recommendation(
+				   last_pages)) {
 			const ulint tm = ut_time_ms();
 			n_flushed = buf_flush_lists(n, LSN_MAX);
 			page_cleaner.flush_time += ut_time_ms() - tm;
