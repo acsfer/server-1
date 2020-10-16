@@ -2312,11 +2312,11 @@ longlong Item_func_between::val_int()
 
 void Item_func_between::print(String *str, enum_query_type query_type)
 {
-  args[0]->print_parenthesised(str, query_type, precedence());
+  args[0]->print_parenthesised(str, query_type, higher_precedence());
   if (negated)
     str->append(STRING_WITH_LEN(" not"));
   str->append(STRING_WITH_LEN(" between "));
-  args[1]->print_parenthesised(str, query_type, precedence());
+  args[1]->print(str, query_type);
   str->append(STRING_WITH_LEN(" and "));
   args[2]->print_parenthesised(str, query_type, precedence());
 }
@@ -5237,7 +5237,7 @@ bool Item_bool_func2::count_sargable_conds(void *arg)
 
 void Item_func_like::print(String *str, enum_query_type query_type)
 {
-  args[0]->print_parenthesised(str, query_type, precedence());
+  args[0]->print_parenthesised(str, query_type, higher_precedence());
   str->append(' ');
   if (negated)
     str->append(STRING_WITH_LEN(" not "));
@@ -5247,7 +5247,7 @@ void Item_func_like::print(String *str, enum_query_type query_type)
   if (escape_used_in_parsing)
   {
     str->append(STRING_WITH_LEN(" escape "));
-    escape_item->print(str, query_type);
+    escape_item->print_parenthesised(str, query_type, precedence());
   }
 }
 

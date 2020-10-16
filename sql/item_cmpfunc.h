@@ -1703,7 +1703,7 @@ public:
   virtual void print(String *str, enum_query_type query_type);
   enum Functype functype() const { return IN_FUNC; }
   const char *func_name() const { return "in"; }
-  enum precedence precedence() const { return CMP_PRECEDENCE; }
+  enum precedence precedence() const { return IN_PRECEDENCE; }
   bool eval_not_null_tables(void *opt_arg);
   void fix_after_pullout(st_select_lex *new_parent, Item **ref, bool merge);
   bool count_sargable_conds(void *arg);
@@ -1998,7 +1998,7 @@ public:
     return this;
   }
   const char *func_name() const { return "like"; }
-  enum precedence precedence() const { return CMP_PRECEDENCE; }
+  enum precedence precedence() const { return BETWEEN_PRECEDENCE; }
   bool fix_fields(THD *thd, Item **ref);
   bool fix_length_and_dec()
   {
@@ -2126,11 +2126,13 @@ public:
   bool fix_fields(THD *thd, Item **ref);
   bool fix_length_and_dec();
   const char *func_name() const { return "regexp"; }
-  enum precedence precedence() const { return CMP_PRECEDENCE; }
+  enum precedence precedence() const { return BETWEEN_PRECEDENCE; }
   Item *get_copy(THD *thd, MEM_ROOT *mem_root) { return 0; }
   void print(String *str, enum_query_type query_type)
   {
-    print_op(str, query_type);
+    args[0]->print_parenthesised(str, query_type, higher_precedence());
+    str->append(STRING_WITH_LEN(" regexp "));
+    args[1]->print_parenthesised(str, query_type, precedence());
   }
 
   CHARSET_INFO *compare_collation() const { return cmp_collation.collation; }
