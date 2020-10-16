@@ -1696,19 +1696,7 @@ af_get_pct_for_lsn(
 		return(0);
 	}
 
-	const lsn_t max_async_age = log_sys.max_modified_age_async;
-
-	if (age < max_async_age && !srv_adaptive_flushing) {
-		/* We have still not reached the max_async point and
-		the user has disabled adaptive flushing. */
-		return(0);
-	}
-
-	/* If we are here then we know that either:
-	1) User has enabled adaptive flushing
-	2) User may have disabled adaptive flushing but we have reached
-	max_async_age. */
-	lsn_t lsn_age_factor = (age * 100) / max_async_age;
+	lsn_t lsn_age_factor = (age * 100) / log_sys.max_modified_age_async;
 
 	ut_ad(srv_max_io_capacity >= srv_io_capacity);
 	return static_cast<ulint>(
@@ -2040,8 +2028,9 @@ furious_flush:
 		} else if (!srv_check_activity(&last_activity)) {
 			/* no activity, but woken up by event */
 			n_flushed = 0;
-		} else if (ulint n= page_cleaner_flush_pages_recommendation(
-				   last_pages)) {
+		} else if (ulint n= srv_adaptive_flushing
+			   ? page_cleaner_flush_pages_recommendation(last_pages)
+			   : srv_io_capacity) {
 			/* Estimate pages from flush_list to be flushed */
 			ulint tm= pc_request_flush_slot(n, LSN_MAX);
 
