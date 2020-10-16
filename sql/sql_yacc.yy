@@ -9033,13 +9033,13 @@ predicate:
               MYSQL_YYABORT;
             $$= item->neg_transformer(thd);
           }
-        | bit_expr BETWEEN_SYM bit_expr AND_SYM predicate
+        | bit_expr BETWEEN_SYM predicate AND_SYM predicate
           {
             $$= new (thd->mem_root) Item_func_between(thd, $1, $3, $5);
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
-        | bit_expr not BETWEEN_SYM bit_expr AND_SYM predicate
+        | bit_expr not BETWEEN_SYM predicate AND_SYM predicate
           {
             Item_func_between *item;
             item= new (thd->mem_root) Item_func_between(thd, $1, $4, $6);
