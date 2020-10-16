@@ -250,7 +250,7 @@ int init_io_cache(IO_CACHE *info, File file, size_t cachesize,
 	  info->write_buffer= info->buffer + cachesize;
         else
           info->write_buffer= info->buffer;
-	info->alloced_buffer= 1;
+	info->alloced_buffer= buffer_block;
 	break;					/* Enough memory found */
       }
       if (cachesize == min_cache)
@@ -324,14 +324,15 @@ int init_slave_io_cache(IO_CACHE *master, IO_CACHE *slave)
   DBUG_ASSERT(!master->share);
   DBUG_ASSERT(master->alloced_buffer);
 
-  if (!(slave_buf= (uchar*)my_malloc(master->buffer_length, MYF(0))))
+  if (!(slave_buf= (uchar*)my_malloc(master->alloced_buffer, MYF(0))))
   {
     return 1;
   }
   memcpy(slave, master, sizeof(IO_CACHE));
   slave->buffer= slave_buf;
 
-  memcpy(slave->buffer, master->buffer, master->buffer_length);
+  memcpy(slave->buffer, master->buffer, master->alloced_buffer);
+
   slave->read_pos= slave->buffer + (master->read_pos - master->buffer);
   slave->read_end= slave->buffer + (master->read_end - master->buffer);
 
@@ -715,7 +716,8 @@ int _my_b_cache_read(IO_CACHE *info, uchar *Buffer, size_t Count)
       end aligned with a block.
     */
     length= IO_ROUND_DN(Count) - diff_length;
-    if ((read_length= mysql_file_read(info->file,Buffer, length, info->myflags))
+    if ((read_length= mysql_file_pread(info->file,Buffer, length,
+                                       pos_in_file, info->myflags))
 	!= length)
     {
       /*
@@ -768,18 +770,9 @@ int _my_b_cache_read(IO_CACHE *info, uchar *Buffer, size_t Count)
   }
   else 
   {
-    if (info->next_file_user)
-    {
-      IO_CACHE *c;
-      for (c= info->next_file_user;
-           c!= info;
-           c= c->next_file_user)
-      {
-        c->seek_not_done= 1;
-      }
-    }
-    if ((length= mysql_file_read(info->file,info->buffer, max_length,
-                            info->myflags)) < Count ||
+
+    if ((length= mysql_file_pread(info->file,info->buffer, max_length,
+                            pos_in_file, info->myflags)) < Count ||
 	   length == (size_t) -1)
     {
       /*
