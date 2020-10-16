@@ -1556,6 +1556,7 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
   ut_ad(sync_lsn);
   ut_ad(async_lsn >= sync_lsn);
   ut_ad(!log_mutex_own());
+  ut_ad(!srv_read_only_mode);
 
   if (recv_recovery_is_on())
     recv_sys.apply(true);
@@ -1611,6 +1612,10 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
 void buf_flush_ahead(lsn_t lsn)
 {
   ut_ad(!log_mutex_own());
+  ut_ad(!srv_read_only_mode);
+
+  if (recv_recovery_is_on())
+    recv_sys.apply(true);
 
   if (buf_flush_sync_lsn.load(std::memory_order_relaxed) < lsn &&
       UNIV_LIKELY(srv_flush_sync) && UNIV_LIKELY(buf_page_cleaner_is_active))
@@ -1882,19 +1887,56 @@ static ulint pc_request_flush_slot(ulint max_n, lsn_t lsn)
   return flush_start_tm;
 }
 
-/** Conduct checkpoint-related flushing for innodb_flush_sync=ON
+/** Conduct checkpoint-related flushing for innodb_flush_sync=ON,
+and try to initiate checkpoints until the target is met.
+@param lsn   minimum value of buf_pool.get_oldest_modification(LSN_MAX)
 @return number of pages flushed */
 ATTRIBUTE_COLD static ulint buf_flush_sync_for_checkpoint(lsn_t lsn)
 {
+  ut_ad(!srv_read_only_mode);
+
   for (ulint n_flushed= 0;;)
   {
     pc_request_flush_slot(ULINT_UNDEFINED, lsn);
     n_flushed+= page_cleaner.slot.n_flushed_list;
 
-    mysql_mutex_lock(&buf_pool.flush_list_mutex);
+    /* Attempt to perform a log checkpoint upon completing each batch. */
+    if (recv_recovery_is_on())
+      recv_sys.apply(true);
 
+    switch (srv_file_flush_method) {
+    case SRV_NOSYNC:
+    case SRV_O_DIRECT_NO_FSYNC:
+      break;
+    default:
+      fil_flush_file_spaces();
+    }
+
+    log_mutex_enter();
+    const lsn_t newest_lsn= log_sys.get_lsn();
+    log_flush_order_mutex_enter();
+    mysql_mutex_lock(&buf_pool.flush_list_mutex);
+    lsn_t measure= buf_pool.get_oldest_modification(newest_lsn);
+    log_flush_order_mutex_exit();
+
+    if (measure > log_sys.last_checkpoint_lsn + SIZE_OF_FILE_CHECKPOINT)
+    {
+      mysql_mutex_unlock(&buf_pool.flush_list_mutex);
+      log_checkpoint_low(measure, newest_lsn);
+      mysql_mutex_lock(&buf_pool.flush_list_mutex);
+      measure= buf_pool.get_oldest_modification(LSN_MAX);
+    }
+    else
+    {
+      log_mutex_exit();
+      if (measure == newest_lsn)
+        measure= LSN_MAX;
+    }
+
+    ut_ad(!log_mutex_own());
+
+    /* After attempting log checkpoint, check if we have reached our target. */
     const lsn_t target= buf_flush_sync_lsn.load(std::memory_order_relaxed);
-    const lsn_t measure= buf_pool.get_oldest_modification(LSN_MAX);
 
     if (measure >= target)
       buf_flush_sync_lsn.store(0, std::memory_order_relaxed);

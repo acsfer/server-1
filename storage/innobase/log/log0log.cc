@@ -1212,16 +1212,10 @@ void log_write_checkpoint_info(lsn_t end_lsn)
 blocks from the buffer pool: it only checks what is lsn of the oldest
 modification in the pool, and writes information about the lsn in
 log file. Use log_make_checkpoint() to flush also the pool.
-@return true if success, false if a checkpoint write was already running */
+@retval true if the checkpoint was or had been made
+@retval false if a checkpoint write was already running */
 bool log_checkpoint()
 {
-	ut_ad(!srv_read_only_mode);
-
-	DBUG_EXECUTE_IF("no_checkpoint",
-			/* We sleep for a long enough time, forcing
-			the checkpoint doesn't happen any more. */
-			os_thread_sleep(360000000););
-
 	if (recv_recovery_is_on()) {
 		recv_sys.apply(true);
 	}
@@ -1235,10 +1229,24 @@ bool log_checkpoint()
 	}
 
 	log_mutex_enter();
-
-	ut_ad(!recv_no_log_write);
 	const lsn_t end_lsn = log_sys.get_lsn();
 	const lsn_t oldest_lsn = log_buf_pool_get_oldest_modification(end_lsn);
+	return log_checkpoint_low(oldest_lsn, end_lsn);
+}
+
+/** Initiate a log checkpoint, discarding the start of the log.
+@param oldest_lsn   the checkpoint LSN
+@param end_lsn      log_sys.get_lsn()
+@return true if success, false if a checkpoint write was already running */
+bool log_checkpoint_low(lsn_t oldest_lsn, lsn_t end_lsn)
+{
+	ut_ad(!srv_read_only_mode);
+	ut_ad(log_mutex_own());
+	ut_ad(oldest_lsn <= end_lsn);
+	ut_ad(end_lsn == log_sys.get_lsn());
+	ut_ad(oldest_lsn <= log_buf_pool_get_oldest_modification(end_lsn));
+
+	ut_ad(!recv_no_log_write);
 
 	/* Because log also contains headers and dummy log records,
 	log_buf_pool_get_oldest_modification() will return end_lsn

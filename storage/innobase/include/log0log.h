@@ -151,8 +151,16 @@ log_buffer_flush_to_disk(
 blocks from the buffer pool: it only checks what is lsn of the oldest
 modification in the pool, and writes information about the lsn in
 log file. Use log_make_checkpoint() to flush also the pool.
-@return true if success, false if a checkpoint write was already running */
+@retval true if the checkpoint was or had been made
+@retval false if a checkpoint write was already running */
 bool log_checkpoint();
+
+/** Initiate a log checkpoint, discarding the start of the log.
+@param oldest_lsn   the checkpoint LSN
+@param end_lsn      log_sys.get_lsn()
+@retval true if the checkpoint was or had been made
+@retval false if a checkpoint write was already running */
+bool log_checkpoint_low(lsn_t oldest_lsn, lsn_t end_lsn);
 
 /** Make a checkpoint */
 void log_make_checkpoint();
