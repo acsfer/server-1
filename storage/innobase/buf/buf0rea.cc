@@ -437,10 +437,12 @@ read_ahead:
   /* Read all the suitable blocks within the area */
   const ulint ibuf_mode= ibuf ? BUF_READ_IBUF_PAGES_ONLY : BUF_READ_ANY_PAGE;
 
-  for (page_id_t i= low; i < high && !space->is_stopping(); ++i)
+  for (page_id_t i= low; i < high; ++i)
   {
     if (ibuf_bitmap_page(i, zip_size))
       continue;
+    if (space->is_stopping())
+      break;
     dberr_t err;
     space->reacquire();
     if (buf_read_page_low(&err, space, false, ibuf_mode, i, zip_size, false))
@@ -695,10 +697,12 @@ failed:
   /* If we got this far, read-ahead can be sensible: do it */
   count= 0;
   for (ulint ibuf_mode= ibuf ? BUF_READ_IBUF_PAGES_ONLY : BUF_READ_ANY_PAGE;
-       new_low != new_high_1 && !space->is_stopping(); ++new_low)
+       new_low != new_high_1; ++new_low)
   {
     if (ibuf_bitmap_page(new_low, zip_size))
       continue;
+    if (space->is_stopping())
+      break;
     dberr_t err;
     space->reacquire();
     count+= buf_read_page_low(&err, space, false, ibuf_mode, new_low, zip_size,

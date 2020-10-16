@@ -1082,7 +1082,8 @@ static ulint buf_flush_try_neighbors(fil_space_t *space,
   ut_ad(page_id >= id);
   ut_ad(page_id < high);
 
-  for (ulint id_fold= id.fold(); id < high; ++id, ++id_fold)
+  for (ulint id_fold= id.fold(); id < high && !space->is_stopping();
+       ++id, ++id_fold)
   {
     if (count + n_flushed >= n_to_flush)
     {
@@ -1282,6 +1283,7 @@ static void buf_flush_LRU_list_batch(ulint max, flush_counters_t *n)
         space->release();
         space= nullptr;
       }
+
       if (!space)
         buf_flush_discard_page(bpage);
       else if (neighbors && space->is_rotational())

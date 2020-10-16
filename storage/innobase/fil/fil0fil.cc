@@ -348,7 +348,12 @@ fil_node_t* fil_space_t::add(const char* name, pfs_os_file_t handle,
 	this->size += size;
 	UT_LIST_ADD_LAST(chain, node);
 	if (node->is_open()) {
-		++fil_system.n_open;
+		n_pending.fetch_and(~CLOSING, std::memory_order_relaxed);
+		if (++fil_system.n_open >= srv_max_n_open_files) {
+			reacquire();
+			try_to_close(true);
+			release();
+		}
 	}
 	mutex_exit(&fil_system.mutex);
 
@@ -2341,7 +2346,7 @@ fil_ibd_create(
 
 	const bool is_compressed = fil_space_t::is_compressed(flags);
 	bool punch_hole = is_compressed;
-
+	fil_space_crypt_t* crypt_data = nullptr;
 #ifdef _WIN32
 	if (is_compressed) {
 		os_file_set_sparse_win32(file);
@@ -2355,6 +2360,7 @@ fil_ibd_create(
 err_exit:
 		os_file_close(file);
 		os_file_delete(innodb_data_file_key, path);
+		free(crypt_data);
 		return NULL;
 	}
 
@@ -2387,8 +2393,7 @@ err_exit:
 
 	/* Create crypt data if the tablespace is either encrypted or user has
 	requested it to remain unencrypted. */
-	fil_space_crypt_t *crypt_data = (mode != FIL_ENCRYPTION_DEFAULT
-					 || srv_encrypt_tables)
+	crypt_data = (mode != FIL_ENCRYPTION_DEFAULT || srv_encrypt_tables)
 		? fil_space_create_crypt_data(mode, key_id)
 		: NULL;
 
@@ -2446,17 +2451,11 @@ err_exit:
 		}
 	}
 
-	fil_space_t* space = fil_space_t::create(name, space_id, flags,
-						 FIL_TYPE_TABLESPACE,
-						 crypt_data, mode);
-	if (!space) {
-		free(crypt_data);
-		*err = DB_ERROR;
-	} else {
+	if (fil_space_t* space = fil_space_t::create(name, space_id, flags,
+						     FIL_TYPE_TABLESPACE,
+						     crypt_data, mode)) {
 		space->punch_hole = punch_hole;
-		/* FIXME: Keep the file open! */
-		fil_node_t* node = space->add(path, OS_FILE_CLOSED, size,
-					      false, true);
+		fil_node_t* node = space->add(path, file, size, false, true);
 		mtr_t mtr;
 		mtr.start();
 		mtr.log_file_op(FILE_CREATE, space_id, node->name);
@@ -2464,19 +2463,15 @@ err_exit:
 
 		node->find_metadata(file);
 		*err = DB_SUCCESS;
+		return space;
 	}
 
-	os_file_close(file);
-
-	if (*err != DB_SUCCESS) {
-		if (has_data_dir) {
-			RemoteDatafile::delete_link_file(name);
-		}
-
-		os_file_delete(innodb_data_file_key, path);
+	if (has_data_dir) {
+		RemoteDatafile::delete_link_file(name);
 	}
 
-	return space;
+	*err = DB_ERROR;
+	goto err_exit;
 }
 
 /** Try to open a single-table tablespace and optionally check that the
