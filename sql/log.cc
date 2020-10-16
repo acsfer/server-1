@@ -4369,7 +4369,7 @@ int MYSQL_BIN_LOG::purge_first_log(Relay_log_info* rli, bool included)
   int error, errcode;
   char *to_purge_if_included= NULL;
   inuse_relaylog *ir;
-  ulonglong log_space_reclaimed= 0;
+  uint64 log_space_reclaimed= 0;
   DBUG_ENTER("purge_first_log");
 
   DBUG_ASSERT(is_open());
@@ -4446,6 +4446,9 @@ int MYSQL_BIN_LOG::purge_first_log(Relay_log_info* rli, bool included)
                             0, 0, &log_space_reclaimed);
 
   mysql_mutex_lock(&rli->log_space_lock);
+  my_atomic_add64_explicit(&rli->log_space_total,
+                           (-(uint64)log_space_reclaimed),
+                           MY_MEMORY_ORDER_RELAXED);
   rli->log_space_total-= log_space_reclaimed;
   mysql_cond_broadcast(&rli->log_space_cond);
   mysql_mutex_unlock(&rli->log_space_lock);
