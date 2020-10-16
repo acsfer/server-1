@@ -173,3 +173,12 @@ update t1 for portion of app from '2024-04-02' to '2026-03-15' set f = 'bar';
 
 # cleanup
 drop table t1;
+
+--echo #
+--echo # MDEV-22805 SIGSEGV in check_fields on UPDATE (optimized builds) | Assertion `thd->lex->sql_command == SQLCOM_UPDATE' failed.
+--echo #
+CREATE TABLE t1 (a INT);
+# Without a patch the following statement crashs a server built in debug mode
+--error ER_PERIOD_NOT_FOUND
+UPDATE t1 FOR PORTION OF APPTIME FROM (SELECT 1 FROM t1) TO 2 SET a = 1;
+DROP TABLE t1;

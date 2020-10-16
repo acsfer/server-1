@@ -9685,8 +9685,19 @@ history_point:
         ;
 
 for_portion_of_time_clause:
-          FOR_SYM PORTION_SYM OF_SYM remember_tok_start ident FROM
-          bit_expr TO_SYM bit_expr
+          FOR_SYM PORTION_SYM OF_SYM remember_tok_start ident
+          {
+            /*
+              Set Lex->period_conditions in order to mark that this
+              statment handles TEMPORAL PERIOD. Later, during handling
+              a subquery specified in the FROM clause having the vale
+              true for this flag will result in setting the true value
+              for the data member select_lex->exclude_from_table_unique_tes
+              (see an action for the grammar rule table_primary_ident).
+            */
+            Lex->period_conditions.set_all();
+          }
+          FROM bit_expr TO_SYM bit_expr
           {
             if (unlikely(0 == strcasecmp($5.str, "SYSTEM_TIME")))
             {
@@ -9694,8 +9705,8 @@ for_portion_of_time_clause:
               MYSQL_YYABORT;
             }
             Lex->period_conditions.init(SYSTEM_TIME_FROM_TO,
-                                        Vers_history_point(VERS_TIMESTAMP, $7),
-                                        Vers_history_point(VERS_TIMESTAMP, $9),
+                                        Vers_history_point(VERS_TIMESTAMP, $8),
+                                        Vers_history_point(VERS_TIMESTAMP, $10),
                                         $5);
           }
         ;
@@ -12408,6 +12419,15 @@ table_primary_ident:
                                                 Select->pop_index_hints(),
                                                 $2)))
               MYSQL_YYABORT;
+            if (thd->lex->period_conditions.is_set())
+              /*
+                In case a statement being handled is about temporal period,
+                assign the true value to the data member
+                  select_lex->exclude_from_table_unique_test
+                in order to ignore this table name during searching for
+                table name duplicates in the function find_dup_table().
+              */
+              $$->select_lex->exclude_from_table_unique_test= true;
             if ($3)
               $$->vers_conditions= Lex->vers_conditions;
           }
