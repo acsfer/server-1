@@ -4010,12 +4010,12 @@ select charset(2 REGEXP 3 COLLATE latin1_bin), charset(2 REGEXP (3 COLLATE latin
 charset(2 REGEXP 3 COLLATE latin1_bin)	charset(2 REGEXP (3 COLLATE latin1_bin))	charset((2 REGEXP 3) COLLATE latin1_bin)
 binary	binary	latin1
 create or replace view v1 as select 2 REGEXP 3 IN (0,1), 2 REGEXP (3 IN (0,1)), (2 REGEXP 3) IN (0,1);
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'IN (0,1), 2 REGEXP (3 IN (0,1)), (2 REGEXP 3) IN (0,1)' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select charset(2 regexp 3 collate latin1_bin) AS `charset(2 REGEXP 3 COLLATE latin1_bin)`,charset(2 regexp 3 collate latin1_bin) AS `charset(2 REGEXP (3 COLLATE latin1_bin))`,charset((2 regexp 3) collate latin1_bin) AS `charset((2 REGEXP 3) COLLATE latin1_bin)`
+select 2 regexp 3 in (0,1) AS `2 REGEXP 3 IN (0,1)`,2 regexp 3 in (0,1) AS `2 REGEXP (3 IN (0,1))`,(2 regexp 3) in (0,1) AS `(2 REGEXP 3) IN (0,1)`
 select 2 REGEXP 3 IN (0,1), 2 REGEXP (3 IN (0,1)), (2 REGEXP 3) IN (0,1) union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'IN (0,1), 2 REGEXP (3 IN (0,1)), (2 REGEXP 3) IN (0,1) union select * from v1' at line 1
+2 REGEXP 3 IN (0,1)	2 REGEXP (3 IN (0,1))	(2 REGEXP 3) IN (0,1)
+0	0	1
 create or replace view v1 as select 2 REGEXP 3 OR 3, 2 REGEXP (3 OR 3), (2 REGEXP 3) OR 3;
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
@@ -4108,19 +4108,19 @@ select 2 REGEXP 3 != 3, 2 REGEXP (3 != 3), (2 REGEXP 3) != 3 union select * from
 2 REGEXP 3 != 3	2 REGEXP (3 != 3)	(2 REGEXP 3) != 3
 1	0	1
 create or replace view v1 as select 1 REGEXP 3 LIKE 3, 1 REGEXP (3 LIKE 3), (1 REGEXP 3) LIKE 3;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'LIKE 3, 1 REGEXP (3 LIKE 3), (1 REGEXP 3) LIKE 3' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 regexp 3 <> 3 AS `2 REGEXP 3 != 3`,2 regexp (3 <> 3) AS `2 REGEXP (3 != 3)`,2 regexp 3 <> 3 AS `(2 REGEXP 3) != 3`
+select 1 regexp 3 like 3 AS `1 REGEXP 3 LIKE 3`,1 regexp 3 like 3 AS `1 REGEXP (3 LIKE 3)`,(1 regexp 3) like 3 AS `(1 REGEXP 3) LIKE 3`
 select 1 REGEXP 3 LIKE 3, 1 REGEXP (3 LIKE 3), (1 REGEXP 3) LIKE 3 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'LIKE 3, 1 REGEXP (3 LIKE 3), (1 REGEXP 3) LIKE 3 union select * from v1' at line 1
+1 REGEXP 3 LIKE 3	1 REGEXP (3 LIKE 3)	(1 REGEXP 3) LIKE 3
+1	1	0
 create or replace view v1 as select 1 REGEXP 3 REGEXP 3, 1 REGEXP (3 REGEXP 3), (1 REGEXP 3) REGEXP 3;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'REGEXP 3, 1 REGEXP (3 REGEXP 3), (1 REGEXP 3) REGEXP 3' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 regexp 3 <> 3 AS `2 REGEXP 3 != 3`,2 regexp (3 <> 3) AS `2 REGEXP (3 != 3)`,2 regexp 3 <> 3 AS `(2 REGEXP 3) != 3`
+select 1 regexp 3 regexp 3 AS `1 REGEXP 3 REGEXP 3`,1 regexp 3 regexp 3 AS `1 REGEXP (3 REGEXP 3)`,(1 regexp 3) regexp 3 AS `(1 REGEXP 3) REGEXP 3`
 select 1 REGEXP 3 REGEXP 3, 1 REGEXP (3 REGEXP 3), (1 REGEXP 3) REGEXP 3 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'REGEXP 3, 1 REGEXP (3 REGEXP 3), (1 REGEXP 3) REGEXP 3 union select * from v1' at line 1
+1 REGEXP 3 REGEXP 3	1 REGEXP (3 REGEXP 3)	(1 REGEXP 3) REGEXP 3
+1	1	0
 create or replace view v1 as select 2 REGEXP 3 | 3, 2 REGEXP (3 | 3), (2 REGEXP 3) | 3;
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
@@ -4213,12 +4213,12 @@ select 2 REGEXP 3 ^ 3, 2 REGEXP (3 ^ 3), (2 REGEXP 3) ^ 3 union select * from v1
 2 REGEXP 3 ^ 3	2 REGEXP (3 ^ 3)	(2 REGEXP 3) ^ 3
 0	0	3
 create or replace view v1 as select 2 REGEXP 2 BETWEEN 1 AND 3, 2 REGEXP (2 BETWEEN 1 AND 3), (2 REGEXP 2) BETWEEN 1 AND 3;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'BETWEEN 1 AND 3, 2 REGEXP (2 BETWEEN 1 AND 3), (2 REGEXP 2) BETWEEN 1 AND 3' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 regexp 3 ^ 3 AS `2 REGEXP 3 ^ 3`,2 regexp 3 ^ 3 AS `2 REGEXP (3 ^ 3)`,(2 regexp 3) ^ 3 AS `(2 REGEXP 3) ^ 3`
+select 2 regexp 2 between 1 and 3 AS `2 REGEXP 2 BETWEEN 1 AND 3`,2 regexp 2 between 1 and 3 AS `2 REGEXP (2 BETWEEN 1 AND 3)`,(2 regexp 2) between 1 and 3 AS `(2 REGEXP 2) BETWEEN 1 AND 3`
 select 2 REGEXP 2 BETWEEN 1 AND 3, 2 REGEXP (2 BETWEEN 1 AND 3), (2 REGEXP 2) BETWEEN 1 AND 3 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'BETWEEN 1 AND 3, 2 REGEXP (2 BETWEEN 1 AND 3), (2 REGEXP 2) BETWEEN 1 AND 3 u...' at line 1
+2 REGEXP 2 BETWEEN 1 AND 3	2 REGEXP (2 BETWEEN 1 AND 3)	(2 REGEXP 2) BETWEEN 1 AND 3
+0	0	1
 create or replace view v1 as select 2 | 3 IS FALSE, 2 | (3 IS FALSE), (2 | 3) IS FALSE;
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
@@ -7091,12 +7091,12 @@ select charset(2 LIKE 1 ESCAPE 3 COLLATE latin1_bin), charset(2 LIKE 1 ESCAPE (3
 charset(2 LIKE 1 ESCAPE 3 COLLATE latin1_bin)	charset(2 LIKE 1 ESCAPE (3 COLLATE latin1_bin))	charset((2 LIKE 1 ESCAPE 3) COLLATE latin1_bin)
 binary	binary	latin1
 create or replace view v1 as select 2 LIKE 1 ESCAPE 3 IN(0,1), 2 LIKE 1 ESCAPE (3 IN(0,1)), (2 LIKE 1 ESCAPE 3) IN(0,1);
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'IN(0,1), 2 LIKE 1 ESCAPE (3 IN(0,1)), (2 LIKE 1 ESCAPE 3) IN(0,1)' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select charset(2 like 1 escape 3 collate latin1_bin) AS `charset(2 LIKE 1 ESCAPE 3 COLLATE latin1_bin)`,charset(2 like 1 escape 3 collate latin1_bin) AS `charset(2 LIKE 1 ESCAPE (3 COLLATE latin1_bin))`,charset((2 like 1 escape 3) collate latin1_bin) AS `charset((2 LIKE 1 ESCAPE 3) COLLATE latin1_bin)`
+select 2 like 1 escape 3 in (0,1) AS `2 LIKE 1 ESCAPE 3 IN(0,1)`,2 like 1 escape 3 in (0,1) AS `2 LIKE 1 ESCAPE (3 IN(0,1))`,(2 like 1 escape 3) in (0,1) AS `(2 LIKE 1 ESCAPE 3) IN(0,1)`
 select 2 LIKE 1 ESCAPE 3 IN(0,1), 2 LIKE 1 ESCAPE (3 IN(0,1)), (2 LIKE 1 ESCAPE 3) IN(0,1) union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'IN(0,1), 2 LIKE 1 ESCAPE (3 IN(0,1)), (2 LIKE 1 ESCAPE 3) IN(0,1) union selec...' at line 1
+2 LIKE 1 ESCAPE 3 IN(0,1)	2 LIKE 1 ESCAPE (3 IN(0,1))	(2 LIKE 1 ESCAPE 3) IN(0,1)
+0	0	1
 create or replace view v1 as select 2 LIKE 1 ESCAPE 3 OR 4, 2 LIKE 1 ESCAPE (3 OR 4), (2 LIKE 1 ESCAPE 3) OR 4;
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
@@ -7189,110 +7189,110 @@ select 2 LIKE 1 ESCAPE 3 != 4, 2 LIKE 1 ESCAPE (3 != 4), (2 LIKE 1 ESCAPE 3) != 
 2 LIKE 1 ESCAPE 3 != 4	2 LIKE 1 ESCAPE (3 != 4)	(2 LIKE 1 ESCAPE 3) != 4
 1	0	1
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 LIKE 4, 2 LIKE 2 ESCAPE (3 LIKE 4), (2 LIKE 2 ESCAPE 3) LIKE 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'LIKE 4, 2 LIKE 2 ESCAPE (3 LIKE 4), (2 LIKE 2 ESCAPE 3) LIKE 4' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 like 4 AS `2 LIKE 2 ESCAPE 3 LIKE 4`,2 like 2 escape 3 like 4 AS `2 LIKE 2 ESCAPE (3 LIKE 4)`,(2 like 2 escape 3) like 4 AS `(2 LIKE 2 ESCAPE 3) LIKE 4`
 select 2 LIKE 2 ESCAPE 3 LIKE 4, 2 LIKE 2 ESCAPE (3 LIKE 4), (2 LIKE 2 ESCAPE 3) LIKE 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'LIKE 4, 2 LIKE 2 ESCAPE (3 LIKE 4), (2 LIKE 2 ESCAPE 3) LIKE 4 union select *...' at line 1
+2 LIKE 2 ESCAPE 3 LIKE 4	2 LIKE 2 ESCAPE (3 LIKE 4)	(2 LIKE 2 ESCAPE 3) LIKE 4
+1	1	0
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 REGEXP 4, 2 LIKE 2 ESCAPE (3 REGEXP 4), (2 LIKE 2 ESCAPE 3) REGEXP 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'REGEXP 4, 2 LIKE 2 ESCAPE (3 REGEXP 4), (2 LIKE 2 ESCAPE 3) REGEXP 4' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 regexp 4 AS `2 LIKE 2 ESCAPE 3 REGEXP 4`,2 like 2 escape 3 regexp 4 AS `2 LIKE 2 ESCAPE (3 REGEXP 4)`,(2 like 2 escape 3) regexp 4 AS `(2 LIKE 2 ESCAPE 3) REGEXP 4`
 select 2 LIKE 2 ESCAPE 3 REGEXP 4, 2 LIKE 2 ESCAPE (3 REGEXP 4), (2 LIKE 2 ESCAPE 3) REGEXP 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'REGEXP 4, 2 LIKE 2 ESCAPE (3 REGEXP 4), (2 LIKE 2 ESCAPE 3) REGEXP 4 union se...' at line 1
+2 LIKE 2 ESCAPE 3 REGEXP 4	2 LIKE 2 ESCAPE (3 REGEXP 4)	(2 LIKE 2 ESCAPE 3) REGEXP 4
+1	1	0
 create or replace view v1 as select 2 LIKE 1 ESCAPE 3 | 4, 2 LIKE 1 ESCAPE (3 | 4), (2 LIKE 1 ESCAPE 3) | 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '| 4, 2 LIKE 1 ESCAPE (3 | 4), (2 LIKE 1 ESCAPE 3) | 4' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 1 escape 3 | 4 AS `2 LIKE 1 ESCAPE 3 | 4`,2 like 1 escape 3 | 4 AS `2 LIKE 1 ESCAPE (3 | 4)`,(2 like 1 escape 3) | 4 AS `(2 LIKE 1 ESCAPE 3) | 4`
 select 2 LIKE 1 ESCAPE 3 | 4, 2 LIKE 1 ESCAPE (3 | 4), (2 LIKE 1 ESCAPE 3) | 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '| 4, 2 LIKE 1 ESCAPE (3 | 4), (2 LIKE 1 ESCAPE 3) | 4 union select * from v1' at line 1
+2 LIKE 1 ESCAPE 3 | 4	2 LIKE 1 ESCAPE (3 | 4)	(2 LIKE 1 ESCAPE 3) | 4
+0	0	4
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 & 4, 2 LIKE 2 ESCAPE (3 & 4), (2 LIKE 2 ESCAPE 3) & 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '& 4, 2 LIKE 2 ESCAPE (3 & 4), (2 LIKE 2 ESCAPE 3) & 4' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 & 4 AS `2 LIKE 2 ESCAPE 3 & 4`,2 like 2 escape 3 & 4 AS `2 LIKE 2 ESCAPE (3 & 4)`,(2 like 2 escape 3) & 4 AS `(2 LIKE 2 ESCAPE 3) & 4`
 select 2 LIKE 2 ESCAPE 3 & 4, 2 LIKE 2 ESCAPE (3 & 4), (2 LIKE 2 ESCAPE 3) & 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '& 4, 2 LIKE 2 ESCAPE (3 & 4), (2 LIKE 2 ESCAPE 3) & 4 union select * from v1' at line 1
+2 LIKE 2 ESCAPE 3 & 4	2 LIKE 2 ESCAPE (3 & 4)	(2 LIKE 2 ESCAPE 3) & 4
+1	1	0
 create or replace view v1 as select 2 LIKE 2 ESCAPE 1 << 1, 2 LIKE 2 ESCAPE (1 << 1), (2 LIKE 2 ESCAPE 1) << 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '<< 1, 2 LIKE 2 ESCAPE (1 << 1), (2 LIKE 2 ESCAPE 1) << 1' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 1 << 1 AS `2 LIKE 2 ESCAPE 1 << 1`,2 like 2 escape 1 << 1 AS `2 LIKE 2 ESCAPE (1 << 1)`,(2 like 2 escape 1) << 1 AS `(2 LIKE 2 ESCAPE 1) << 1`
 select 2 LIKE 2 ESCAPE 1 << 1, 2 LIKE 2 ESCAPE (1 << 1), (2 LIKE 2 ESCAPE 1) << 1 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '<< 1, 2 LIKE 2 ESCAPE (1 << 1), (2 LIKE 2 ESCAPE 1) << 1 union select * from v1' at line 1
+2 LIKE 2 ESCAPE 1 << 1	2 LIKE 2 ESCAPE (1 << 1)	(2 LIKE 2 ESCAPE 1) << 1
+1	1	2
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 >> 4, 2 LIKE 2 ESCAPE (3 >> 4), (2 LIKE 2 ESCAPE 3) >> 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '>> 4, 2 LIKE 2 ESCAPE (3 >> 4), (2 LIKE 2 ESCAPE 3) >> 4' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 >> 4 AS `2 LIKE 2 ESCAPE 3 >> 4`,2 like 2 escape 3 >> 4 AS `2 LIKE 2 ESCAPE (3 >> 4)`,(2 like 2 escape 3) >> 4 AS `(2 LIKE 2 ESCAPE 3) >> 4`
 select 2 LIKE 2 ESCAPE 3 >> 4, 2 LIKE 2 ESCAPE (3 >> 4), (2 LIKE 2 ESCAPE 3) >> 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '>> 4, 2 LIKE 2 ESCAPE (3 >> 4), (2 LIKE 2 ESCAPE 3) >> 4 union select * from v1' at line 1
+2 LIKE 2 ESCAPE 3 >> 4	2 LIKE 2 ESCAPE (3 >> 4)	(2 LIKE 2 ESCAPE 3) >> 4
+1	1	0
 create or replace view v1 as select 2 LIKE 1 ESCAPE 3 +INTERVAL 1 DAY, 2 LIKE 1 ESCAPE (3 +INTERVAL 1 DAY), (2 LIKE 1 ESCAPE 3) +INTERVAL 1 DAY;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '+INTERVAL 1 DAY, 2 LIKE 1 ESCAPE (3 +INTERVAL 1 DAY), (2 LIKE 1 ESCAPE 3) +IN...' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 1 escape 3 + interval 1 day AS `2 LIKE 1 ESCAPE 3 +INTERVAL 1 DAY`,2 like 1 escape 3 + interval 1 day AS `2 LIKE 1 ESCAPE (3 +INTERVAL 1 DAY)`,(2 like 1 escape 3) + interval 1 day AS `(2 LIKE 1 ESCAPE 3) +INTERVAL 1 DAY`
 select 2 LIKE 1 ESCAPE 3 +INTERVAL 1 DAY, 2 LIKE 1 ESCAPE (3 +INTERVAL 1 DAY), (2 LIKE 1 ESCAPE 3) +INTERVAL 1 DAY union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '+INTERVAL 1 DAY, 2 LIKE 1 ESCAPE (3 +INTERVAL 1 DAY), (2 LIKE 1 ESCAPE 3) +IN...' at line 1
+2 LIKE 1 ESCAPE 3 +INTERVAL 1 DAY	2 LIKE 1 ESCAPE (3 +INTERVAL 1 DAY)	(2 LIKE 1 ESCAPE 3) +INTERVAL 1 DAY
+0	0	NULL
 create or replace view v1 as select 2 LIKE 1 ESCAPE 3 + 4, 2 LIKE 1 ESCAPE (3 + 4), (2 LIKE 1 ESCAPE 3) + 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '+ 4, 2 LIKE 1 ESCAPE (3 + 4), (2 LIKE 1 ESCAPE 3) + 4' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 1 escape 3 + 4 AS `2 LIKE 1 ESCAPE 3 + 4`,2 like 1 escape 3 + 4 AS `2 LIKE 1 ESCAPE (3 + 4)`,(2 like 1 escape 3) + 4 AS `(2 LIKE 1 ESCAPE 3) + 4`
 select 2 LIKE 1 ESCAPE 3 + 4, 2 LIKE 1 ESCAPE (3 + 4), (2 LIKE 1 ESCAPE 3) + 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '+ 4, 2 LIKE 1 ESCAPE (3 + 4), (2 LIKE 1 ESCAPE 3) + 4 union select * from v1' at line 1
+2 LIKE 1 ESCAPE 3 + 4	2 LIKE 1 ESCAPE (3 + 4)	(2 LIKE 1 ESCAPE 3) + 4
+0	0	4
 create or replace view v1 as select 2 LIKE 2 ESCAPE 1 - 1, 2 LIKE 2 ESCAPE (1 - 1), (2 LIKE 2 ESCAPE 1) - 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '- 1, 2 LIKE 2 ESCAPE (1 - 1), (2 LIKE 2 ESCAPE 1) - 1' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 1 - 1 AS `2 LIKE 2 ESCAPE 1 - 1`,2 like 2 escape 1 - 1 AS `2 LIKE 2 ESCAPE (1 - 1)`,(2 like 2 escape 1) - 1 AS `(2 LIKE 2 ESCAPE 1) - 1`
 select 2 LIKE 2 ESCAPE 1 - 1, 2 LIKE 2 ESCAPE (1 - 1), (2 LIKE 2 ESCAPE 1) - 1 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '- 1, 2 LIKE 2 ESCAPE (1 - 1), (2 LIKE 2 ESCAPE 1) - 1 union select * from v1' at line 1
+2 LIKE 2 ESCAPE 1 - 1	2 LIKE 2 ESCAPE (1 - 1)	(2 LIKE 2 ESCAPE 1) - 1
+1	1	0
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 * 0, 2 LIKE 2 ESCAPE (3 * 0), (2 LIKE 2 ESCAPE 3) * 0;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '* 0, 2 LIKE 2 ESCAPE (3 * 0), (2 LIKE 2 ESCAPE 3) * 0' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 * 0 AS `2 LIKE 2 ESCAPE 3 * 0`,2 like 2 escape 3 * 0 AS `2 LIKE 2 ESCAPE (3 * 0)`,(2 like 2 escape 3) * 0 AS `(2 LIKE 2 ESCAPE 3) * 0`
 select 2 LIKE 2 ESCAPE 3 * 0, 2 LIKE 2 ESCAPE (3 * 0), (2 LIKE 2 ESCAPE 3) * 0 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '* 0, 2 LIKE 2 ESCAPE (3 * 0), (2 LIKE 2 ESCAPE 3) * 0 union select * from v1' at line 1
+2 LIKE 2 ESCAPE 3 * 0	2 LIKE 2 ESCAPE (3 * 0)	(2 LIKE 2 ESCAPE 3) * 0
+1	1	0
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 DIV 3, 2 LIKE 2 ESCAPE (3 DIV 3), (2 LIKE 2 ESCAPE 3) DIV 3;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'DIV 3, 2 LIKE 2 ESCAPE (3 DIV 3), (2 LIKE 2 ESCAPE 3) DIV 3' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 DIV 3 AS `2 LIKE 2 ESCAPE 3 DIV 3`,2 like 2 escape 3 DIV 3 AS `2 LIKE 2 ESCAPE (3 DIV 3)`,(2 like 2 escape 3) DIV 3 AS `(2 LIKE 2 ESCAPE 3) DIV 3`
 select 2 LIKE 2 ESCAPE 3 DIV 3, 2 LIKE 2 ESCAPE (3 DIV 3), (2 LIKE 2 ESCAPE 3) DIV 3 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'DIV 3, 2 LIKE 2 ESCAPE (3 DIV 3), (2 LIKE 2 ESCAPE 3) DIV 3 union select * fr...' at line 1
+2 LIKE 2 ESCAPE 3 DIV 3	2 LIKE 2 ESCAPE (3 DIV 3)	(2 LIKE 2 ESCAPE 3) DIV 3
+1	1	0
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 MOD 1, 2 LIKE 2 ESCAPE (3 MOD 1), (2 LIKE 2 ESCAPE 3) MOD 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'MOD 1, 2 LIKE 2 ESCAPE (3 MOD 1), (2 LIKE 2 ESCAPE 3) MOD 1' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 % 1 AS `2 LIKE 2 ESCAPE 3 MOD 1`,2 like 2 escape 3 % 1 AS `2 LIKE 2 ESCAPE (3 MOD 1)`,(2 like 2 escape 3) % 1 AS `(2 LIKE 2 ESCAPE 3) MOD 1`
 select 2 LIKE 2 ESCAPE 3 MOD 1, 2 LIKE 2 ESCAPE (3 MOD 1), (2 LIKE 2 ESCAPE 3) MOD 1 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'MOD 1, 2 LIKE 2 ESCAPE (3 MOD 1), (2 LIKE 2 ESCAPE 3) MOD 1 union select * fr...' at line 1
+2 LIKE 2 ESCAPE 3 MOD 1	2 LIKE 2 ESCAPE (3 MOD 1)	(2 LIKE 2 ESCAPE 3) MOD 1
+1	1	0
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 % 1, 2 LIKE 2 ESCAPE (3 % 1), (2 LIKE 2 ESCAPE 3) % 1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '% 1, 2 LIKE 2 ESCAPE (3 % 1), (2 LIKE 2 ESCAPE 3) % 1' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 % 1 AS `2 LIKE 2 ESCAPE 3 % 1`,2 like 2 escape 3 % 1 AS `2 LIKE 2 ESCAPE (3 % 1)`,(2 like 2 escape 3) % 1 AS `(2 LIKE 2 ESCAPE 3) % 1`
 select 2 LIKE 2 ESCAPE 3 % 1, 2 LIKE 2 ESCAPE (3 % 1), (2 LIKE 2 ESCAPE 3) % 1 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '% 1, 2 LIKE 2 ESCAPE (3 % 1), (2 LIKE 2 ESCAPE 3) % 1 union select * from v1' at line 1
+2 LIKE 2 ESCAPE 3 % 1	2 LIKE 2 ESCAPE (3 % 1)	(2 LIKE 2 ESCAPE 3) % 1
+1	1	0
 create or replace view v1 as select 2 LIKE 1 ESCAPE 3 ^ 4, 2 LIKE 1 ESCAPE (3 ^ 4), (2 LIKE 1 ESCAPE 3) ^ 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '^ 4, 2 LIKE 1 ESCAPE (3 ^ 4), (2 LIKE 1 ESCAPE 3) ^ 4' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 1 escape 3 ^ 4 AS `2 LIKE 1 ESCAPE 3 ^ 4`,2 like 1 escape 3 ^ 4 AS `2 LIKE 1 ESCAPE (3 ^ 4)`,(2 like 1 escape 3) ^ 4 AS `(2 LIKE 1 ESCAPE 3) ^ 4`
 select 2 LIKE 1 ESCAPE 3 ^ 4, 2 LIKE 1 ESCAPE (3 ^ 4), (2 LIKE 1 ESCAPE 3) ^ 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '^ 4, 2 LIKE 1 ESCAPE (3 ^ 4), (2 LIKE 1 ESCAPE 3) ^ 4 union select * from v1' at line 1
+2 LIKE 1 ESCAPE 3 ^ 4	2 LIKE 1 ESCAPE (3 ^ 4)	(2 LIKE 1 ESCAPE 3) ^ 4
+0	0	4
 create or replace view v1 as select 2 LIKE 2 ESCAPE 3 BETWEEN 2 AND 4, 2 LIKE 2 ESCAPE (3 BETWEEN 2 AND 4), (2 LIKE 2 ESCAPE 3) BETWEEN 2 AND 4;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'BETWEEN 2 AND 4, 2 LIKE 2 ESCAPE (3 BETWEEN 2 AND 4), (2 LIKE 2 ESCAPE 3) BET...' at line 1
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';
 view_definition
-select 2 like 1 escape 3 <> 4 AS `2 LIKE 1 ESCAPE 3 != 4`,2 like 1 escape (3 <> 4) AS `2 LIKE 1 ESCAPE (3 != 4)`,2 like 1 escape 3 <> 4 AS `(2 LIKE 1 ESCAPE 3) != 4`
+select 2 like 2 escape 3 between 2 and 4 AS `2 LIKE 2 ESCAPE 3 BETWEEN 2 AND 4`,2 like 2 escape 3 between 2 and 4 AS `2 LIKE 2 ESCAPE (3 BETWEEN 2 AND 4)`,(2 like 2 escape 3) between 2 and 4 AS `(2 LIKE 2 ESCAPE 3) BETWEEN 2 AND 4`
 select 2 LIKE 2 ESCAPE 3 BETWEEN 2 AND 4, 2 LIKE 2 ESCAPE (3 BETWEEN 2 AND 4), (2 LIKE 2 ESCAPE 3) BETWEEN 2 AND 4 union select * from v1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'BETWEEN 2 AND 4, 2 LIKE 2 ESCAPE (3 BETWEEN 2 AND 4), (2 LIKE 2 ESCAPE 3) BET...' at line 1
+2 LIKE 2 ESCAPE 3 BETWEEN 2 AND 4	2 LIKE 2 ESCAPE (3 BETWEEN 2 AND 4)	(2 LIKE 2 ESCAPE 3) BETWEEN 2 AND 4
+1	1	0
 set sql_mode=PIPES_AS_CONCAT;
 create or replace view v1 as select 2 OR 3 || 3, 2 OR (3 || 3), (2 OR 3) || 3;
 Select view_definition from information_schema.views where table_schema='test' and table_name='v1';

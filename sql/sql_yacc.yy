@@ -1025,7 +1025,7 @@ bool my_yyoverflow(short **a, YYSTYPE **b, ulong *yystacksize);
   Currently there are 102 shift/reduce conflicts.
   We should not introduce new conflicts any more.
 */
-%expect 97
+%expect 95
 
 /*
    Comments for TOKENS.
@@ -9072,13 +9072,13 @@ predicate:
               MYSQL_YYABORT;
             $$= item->neg_transformer(thd);
           }
-        | bit_expr REGEXP bit_expr
+        | bit_expr REGEXP predicate
           {
             $$= new (thd->mem_root) Item_func_regex(thd, $1, $3);
             if ($$ == NULL)
               MYSQL_YYABORT;
           }
-        | bit_expr not REGEXP bit_expr
+        | bit_expr not REGEXP predicate
           {
             Item *item= new (thd->mem_root) Item_func_regex(thd, $1, $4);
             if (item == NULL)
@@ -11469,7 +11469,7 @@ opt_having_clause:
         ;
 
 opt_escape:
-          ESCAPE_SYM simple_expr 
+          ESCAPE_SYM predicate
           {
             Lex->escape_used= TRUE;
             $$= $2;
