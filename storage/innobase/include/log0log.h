@@ -88,23 +88,6 @@ log_free_check(void);
 @param[in]	len	requested minimum size in bytes */
 void log_buffer_extend(ulong len);
 
-/** Open the log for log_write_low. The log must be closed with log_close.
-@param[in]	len	length of the data to be written
-@return start lsn of the log record */
-lsn_t
-log_reserve_and_open(
-	ulint	len);
-/************************************************************//**
-Writes to the log the string given. It is assumed that the caller holds the
-log mutex. */
-void
-log_write_low(
-/*==========*/
-	const byte*	str,		/*!< in: string */
-	ulint		str_len);	/*!< in: string length */
-/** Close the log at mini-transaction commit.
-@return whether buffer pool flushing is needed */
-bool log_close();
 /** Read the current LSN. */
 #define log_get_lsn() log_sys.get_lsn()
 
