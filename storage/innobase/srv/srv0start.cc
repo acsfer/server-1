@@ -1467,6 +1467,11 @@ file_checked:
 			return(srv_init_abort(err));
 		}
 	} else {
+		/* Suppress warnings in fil_space_t::create() for files
+		that are being read before dict_boot() has recovered
+		DICT_HDR_MAX_SPACE_ID. */
+		fil_system.space_id_reuse_warned = true;
+
 		/* We always try to do a recovery, even if the database had
 		been shut down normally: this is the normal startup path */
 
@@ -1527,6 +1532,8 @@ file_checked:
 				trx_sys_print_mysql_binlog_offset();
 			}
 		}
+
+		fil_system.space_id_reuse_warned = false;
 
 		if (!srv_read_only_mode) {
 			const ulint flags = FSP_FLAGS_PAGE_SSIZE();

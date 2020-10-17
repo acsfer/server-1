@@ -928,20 +928,6 @@ fil_space_t *fil_space_t::create(const char *name, ulint id, ulint flags,
 
 	UT_LIST_INIT(space->chain, &fil_node_t::chain);
 
-	if ((purpose == FIL_TYPE_TABLESPACE || purpose == FIL_TYPE_IMPORT)
-	    && !recv_recovery_is_on()
-	    && id > fil_system.max_assigned_id) {
-		if (!fil_system.space_id_reuse_warned) {
-			fil_system.space_id_reuse_warned = true;
-
-			ib::warn() << "Allocated tablespace ID " << id
-				<< " for " << name << ", old maximum was "
-				<< fil_system.max_assigned_id;
-		}
-
-		fil_system.max_assigned_id = id;
-	}
-
 	space->purpose = purpose;
 	space->flags = flags;
 
@@ -991,11 +977,6 @@ fil_space_t *fil_space_t::create(const char *name, ulint id, ulint flags,
 
 	UT_LIST_ADD_LAST(fil_system.space_list, space);
 
-	if (id < SRV_SPACE_ID_UPPER_BOUND && id > fil_system.max_assigned_id) {
-
-		fil_system.max_assigned_id = id;
-	}
-
 	switch (id) {
 	case 0:
 		ut_ad(!fil_system.sys_space);
@@ -1005,6 +986,18 @@ fil_space_t *fil_space_t::create(const char *name, ulint id, ulint flags,
 		ut_ad(!fil_system.temp_space);
 		fil_system.temp_space = space;
 		break;
+	default:
+		ut_ad(purpose != FIL_TYPE_TEMPORARY);
+		if (UNIV_LIKELY(id <= fil_system.max_assigned_id)) {
+			break;
+		}
+		if (!fil_system.space_id_reuse_warned) {
+			ib::warn() << "Allocated tablespace ID " << id
+				<< " for " << name << ", old maximum was "
+				<< fil_system.max_assigned_id;
+		}
+
+		fil_system.max_assigned_id = id;
 	}
 
 	/* Inform key rotation that there could be something
