@@ -1329,6 +1329,7 @@ dberr_t srv_start(bool create_new_db)
 	}
 
 	std::string logfile0;
+	bool create_new_log = create_new_db;
 	if (create_new_db) {
 		flushed_lsn = log_sys.get_lsn();
 		log_sys.set_flushed_lsn(flushed_lsn);
@@ -1350,7 +1351,8 @@ dberr_t srv_start(bool create_new_db)
 			return srv_init_abort(err);
 		}
 
-		if (srv_log_file_size == 0) {
+		create_new_log = srv_log_file_size == 0;
+		if (create_new_log) {
 			if (flushed_lsn < lsn_t(1000)) {
 				ib::error()
 					<< "Cannot create log file because"
@@ -1468,7 +1470,9 @@ file_checked:
 		/* We always try to do a recovery, even if the database had
 		been shut down normally: this is the normal startup path */
 
-		err = recv_recovery_from_checkpoint_start(flushed_lsn);
+		err = create_new_log
+			? DB_SUCCESS
+			: recv_recovery_from_checkpoint_start(flushed_lsn);
 		recv_sys.close_files();
 
 		recv_sys.dblwr.pages.clear();
