@@ -71,7 +71,7 @@ static lsn_t lsn_avg_rate = 0;
 
 /** Target oldest_modification for the page cleaner; writes are protected by
 buf_pool.flush_list_mutex */
-static std::atomic<lsn_t> buf_flush_sync_lsn;
+static Atomic_relaxed<lsn_t> buf_flush_sync_lsn;
 
 #ifdef UNIV_PFS_THREAD
 mysql_pfs_key_t page_cleaner_thread_key;
@@ -1540,6 +1540,7 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
 {
   ut_ad(sync_lsn);
   ut_ad(async_lsn >= sync_lsn);
+  ut_ad(async_lsn < LSN_MAX);
   ut_ad(!log_mutex_own());
   ut_ad(!srv_read_only_mode);
 
@@ -1572,9 +1573,9 @@ ATTRIBUTE_COLD void buf_flush_wait_flushed(lsn_t sync_lsn, lsn_t async_lsn)
   }
   else if (UNIV_LIKELY(srv_flush_sync))
   {
-    if (buf_flush_sync_lsn.load(std::memory_order_relaxed) < async_lsn)
+    if (buf_flush_sync_lsn < async_lsn)
     {
-      buf_flush_sync_lsn.store(async_lsn, std::memory_order_release);
+      buf_flush_sync_lsn= async_lsn;
       mysql_cond_signal(&buf_pool.do_flush_list);
     }
   }
@@ -1603,13 +1604,13 @@ void buf_flush_ahead(lsn_t lsn)
   if (recv_recovery_is_on())
     recv_sys.apply(true);
 
-  if (buf_flush_sync_lsn.load(std::memory_order_relaxed) < lsn &&
+  if (buf_flush_sync_lsn < lsn &&
       UNIV_LIKELY(srv_flush_sync) && UNIV_LIKELY(buf_page_cleaner_is_active))
   {
     mysql_mutex_lock(&buf_pool.flush_list_mutex);
-    if (buf_flush_sync_lsn.load(std::memory_order_relaxed) < lsn)
+    if (buf_flush_sync_lsn < lsn)
     {
-      buf_flush_sync_lsn.store(lsn, std::memory_order_release);
+      buf_flush_sync_lsn= lsn;
       mysql_cond_signal(&buf_pool.do_flush_list);
     }
     mysql_mutex_unlock(&buf_pool.flush_list_mutex);
@@ -1834,15 +1835,21 @@ page_cleaner_flush_pages_recommendation(ulint last_pages_in)
 
 /** Conduct checkpoint-related flushing for innodb_flush_sync=ON,
 and try to initiate checkpoints until the target is met.
-@param lsn   minimum value of buf_pool.get_oldest_modification(LSN_MAX)
-@return number of pages flushed */
-ATTRIBUTE_COLD static ulint buf_flush_sync_for_checkpoint(lsn_t lsn)
+@param lsn   minimum value of buf_pool.get_oldest_modification(LSN_MAX) */
+ATTRIBUTE_COLD static void buf_flush_sync_for_checkpoint(lsn_t lsn)
 {
   ut_ad(!srv_read_only_mode);
 
-  for (ulint n_flushed= 0;;)
+  for (;;)
   {
-    n_flushed+= buf_flush_lists(ULINT_UNDEFINED, lsn);
+    mysql_mutex_unlock(&buf_pool.flush_list_mutex);
+
+    if (ulint n_flushed= buf_flush_lists(ULINT_UNDEFINED, lsn))
+    {
+      MONITOR_INC_VALUE_CUMULATIVE(MONITOR_FLUSH_SYNC_TOTAL_PAGE,
+                                   MONITOR_FLUSH_SYNC_COUNT,
+                                   MONITOR_FLUSH_SYNC_PAGES, n_flushed);
+    }
 
     /* Attempt to perform a log checkpoint upon completing each batch. */
     if (recv_recovery_is_on())
@@ -1860,53 +1867,41 @@ ATTRIBUTE_COLD static ulint buf_flush_sync_for_checkpoint(lsn_t lsn)
     const lsn_t newest_lsn= log_sys.get_lsn();
     log_flush_order_mutex_enter();
     mysql_mutex_lock(&buf_pool.flush_list_mutex);
-    lsn_t measure= buf_pool.get_oldest_modification(newest_lsn);
+    lsn_t measure= buf_pool.get_oldest_modification(0);
     log_flush_order_mutex_exit();
+    const lsn_t checkpoint_lsn= measure ? measure : newest_lsn;
 
-    if (measure > log_sys.last_checkpoint_lsn + SIZE_OF_FILE_CHECKPOINT)
+    if (checkpoint_lsn > log_sys.last_checkpoint_lsn + SIZE_OF_FILE_CHECKPOINT)
     {
       mysql_mutex_unlock(&buf_pool.flush_list_mutex);
-      log_checkpoint_low(measure, newest_lsn);
+      log_checkpoint_low(checkpoint_lsn, newest_lsn);
       mysql_mutex_lock(&buf_pool.flush_list_mutex);
       measure= buf_pool.get_oldest_modification(LSN_MAX);
     }
     else
     {
       log_mutex_exit();
-      if (measure == newest_lsn)
+      if (!measure)
         measure= LSN_MAX;
     }
 
     ut_ad(!log_mutex_own());
 
     /* After attempting log checkpoint, check if we have reached our target. */
-    const lsn_t target= buf_flush_sync_lsn.load(std::memory_order_relaxed);
+    const lsn_t target= buf_flush_sync_lsn;
 
     if (measure >= target)
-      buf_flush_sync_lsn.store(0, std::memory_order_relaxed);
+      buf_flush_sync_lsn= 0;
 
     /* wake up buf_flush_wait_flushed() */
     mysql_cond_broadcast(&buf_pool.done_flush_list);
-    mysql_mutex_unlock(&buf_pool.flush_list_mutex);
 
     lsn= std::max(lsn, target);
+
     if (measure >= lsn)
-      return n_flushed;
+      return;
   }
 }
-
-
-#ifdef UNIV_DEBUG
-/** Loop used to disable the page cleaner thread. */
-static void buf_flush_page_cleaner_disabled_loop()
-{
-	while (innodb_page_cleaner_disabled_debug
-	       && !buf_flush_sync_lsn.load(std::memory_order_relaxed)
-	       && srv_shutdown_state == SRV_SHUTDOWN_NONE) {
-		os_thread_sleep(100000);
-	}
-}
-#endif /* UNIV_DEBUG */
 
 /******************************************************************//**
 page_cleaner thread tasked with flushing dirty pages from the buffer
@@ -1914,176 +1909,145 @@ pools. As of now we'll have only one coordinator.
 @return a dummy parameter */
 static os_thread_ret_t DECLARE_THREAD(buf_flush_page_cleaner)(void*)
 {
-	my_thread_init();
+  my_thread_init();
 #ifdef UNIV_PFS_THREAD
-	pfs_register_thread(page_cleaner_thread_key);
+  pfs_register_thread(page_cleaner_thread_key);
 #endif /* UNIV_PFS_THREAD */
-	ut_ad(!srv_read_only_mode);
-	ut_ad(buf_page_cleaner_is_active);
+  ut_ad(!srv_read_only_mode);
+  ut_ad(buf_page_cleaner_is_active);
 
 #ifdef UNIV_DEBUG_THREAD_CREATION
-	ib::info() << "page_cleaner thread running, id "
-		<< os_thread_pf(os_thread_get_curr_id());
+  ib::info() << "page_cleaner thread running, id "
+             << os_thread_pf(os_thread_get_curr_id());
 #endif /* UNIV_DEBUG_THREAD_CREATION */
 #ifdef UNIV_LINUX
-	/* linux might be able to set different setting for each thread.
-	worth to try to set high priority for the page cleaner thread */
-	const pid_t tid= static_cast<pid_t>(syscall(SYS_gettid));
-	setpriority(PRIO_PROCESS, tid, -20);
-	if (getpriority(PRIO_PROCESS, tid) != -20) {
-		ib::info() << "If the mysqld execution user is authorized,"
-		" page cleaner thread priority can be changed."
-		" See the man page of setpriority().";
-	}
+  /* linux might be able to set different setting for each thread.
+  worth to try to set high priority for the page cleaner thread */
+  const pid_t tid= static_cast<pid_t>(syscall(SYS_gettid));
+  setpriority(PRIO_PROCESS, tid, -20);
+  if (getpriority(PRIO_PROCESS, tid) != -20)
+    ib::info() << "If the mysqld execution user is authorized,"
+                  " page cleaner thread priority can be changed."
+                  " See the man page of setpriority().";
 #endif /* UNIV_LINUX */
 
-	ulint	curr_time = ut_time_ms();
-	ulint	n_flushed = 0;
-	ulint	last_activity = srv_get_activity_count();
-	ulint	last_pages = 0;
+  ulint last_pages= 0;
+  timespec abstime;
+  set_timespec(abstime, 1);
 
-retry:
-	for (ulint next_time = curr_time + 1000;; curr_time = ut_time_ms()) {
-		lsn_t lsn_limit = buf_flush_sync_lsn.load(
-			std::memory_order_acquire);
+  mysql_mutex_lock(&buf_pool.flush_list_mutex);
 
-		if (UNIV_UNLIKELY(lsn_limit != 0)) {
+  lsn_t lsn_limit;
+
+  for (;;)
+  {
+    lsn_limit= buf_flush_sync_lsn;
+
+    if (UNIV_UNLIKELY(lsn_limit != 0))
+    {
 furious_flush:
-			n_flushed = buf_flush_sync_for_checkpoint(lsn_limit);
+      buf_flush_sync_for_checkpoint(lsn_limit);
+      continue;
+    }
 
-			if (n_flushed) {
-				MONITOR_INC_VALUE_CUMULATIVE(
-					MONITOR_FLUSH_SYNC_TOTAL_PAGE,
-					MONITOR_FLUSH_SYNC_COUNT,
-					MONITOR_FLUSH_SYNC_PAGES,
-					n_flushed);
-			}
+    if (srv_shutdown_state > SRV_SHUTDOWN_INITIATED)
+      break;
 
-			continue;
-		}
+    mysql_cond_timedwait(&buf_pool.do_flush_list, &buf_pool.flush_list_mutex,
+                         &abstime);
 
-		if (srv_shutdown_state > SRV_SHUTDOWN_INITIATED) {
-			break;
-		}
+    lsn_limit= buf_flush_sync_lsn;
 
-		bool sleep_timeout;
+    if (UNIV_UNLIKELY(lsn_limit != 0))
+      goto furious_flush;
 
-		/* The page_cleaner skips sleep if the server is
-		idle and there are no pending IOs in the buffer pool
-		and there is work to do. */
-		if (!lsn_limit && next_time > curr_time
-		    && (!n_flushed || !buf_pool.n_pend_reads
-			|| srv_check_activity(&last_activity))) {
-			const ulint sleep_ms = std::min<ulint>(next_time
-							       - curr_time,
-							       1000);
-			timespec abstime;
-			set_timespec_nsec(abstime, 1000000ULL * sleep_ms);
-			mysql_mutex_lock(&buf_pool.flush_list_mutex);
-			const int error = mysql_cond_timedwait(
-				&buf_pool.do_flush_list,
-				&buf_pool.flush_list_mutex,
-				&abstime);
-			lsn_limit = buf_flush_sync_lsn.load(
-				std::memory_order_relaxed);
-			mysql_mutex_unlock(&buf_pool.flush_list_mutex);
-			sleep_timeout = error != 0;
-			if (UNIV_UNLIKELY(lsn_limit != 0)) {
-				goto furious_flush;
-			}
-			if (srv_shutdown_state > SRV_SHUTDOWN_INITIATED) {
-				break;
-			}
-		} else {
-			sleep_timeout = true;
-		}
+    if (srv_shutdown_state > SRV_SHUTDOWN_INITIATED)
+      break;
 
-		if (sleep_timeout || !srv_adaptive_flushing) {
-			/* no activity, slept enough */
-			n_flushed = buf_flush_lists(srv_io_capacity, LSN_MAX);
-			last_pages = n_flushed;
+    mysql_mutex_unlock(&buf_pool.flush_list_mutex);
+    set_timespec(abstime, 1);
 
-			if (n_flushed) {
-				MONITOR_INC_VALUE_CUMULATIVE(
-					MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE,
-					MONITOR_FLUSH_BACKGROUND_COUNT,
-					MONITOR_FLUSH_BACKGROUND_PAGES,
-					n_flushed);
+    ulint n_flushed;
 
-				/* The periodic log_checkpoint() call here
-				makes it harder to reproduce bugs in crash
-				recovery or mariabackup --prepare, or in code
-				that writes the redo log records. Omitting the
-				call here should not affect correctness,
-				because log_free_check() should still be
-				invoking checkpoints when needed. */
-				DBUG_EXECUTE_IF("ib_log_checkpoint_avoid",
-						continue;);
+    if (!srv_adaptive_flushing)
+    {
+      n_flushed= buf_flush_lists(srv_io_capacity, LSN_MAX);
 
-				/* FIXME: do this only if at least N
-				seconds elapsed since the last checkpoint,
-				and remove the checkpoint calls from the
-				master task. Also do this on adaptive
-				flushing. */
-				if (!recv_recovery_is_on()
-				    && srv_operation == SRV_OPERATION_NORMAL) {
-					log_checkpoint();
-				}
-			}
-		} else if (!srv_check_activity(&last_activity)) {
-			/* no activity, but woken up by event */
-			n_flushed = 0;
-		} else if (ulint n = page_cleaner_flush_pages_recommendation(
-				   last_pages)) {
-			const ulint tm = ut_time_ms();
-			n_flushed = buf_flush_lists(n, LSN_MAX);
-			page_cleaner.flush_time += ut_time_ms() - tm;
+      if (n_flushed)
+      {
+        MONITOR_INC_VALUE_CUMULATIVE(MONITOR_FLUSH_BACKGROUND_TOTAL_PAGE,
+                                     MONITOR_FLUSH_BACKGROUND_COUNT,
+                                     MONITOR_FLUSH_BACKGROUND_PAGES,
+                                     n_flushed);
+do_checkpoint:
+        /* The periodic log_checkpoint() call here makes it harder to
+        reproduce bugs in crash recovery or mariabackup --prepare, or
+        in code that writes the redo log records. Omitting the call
+        here should not affect correctness, because log_free_check()
+        should still be invoking checkpoints when needed. */
+        DBUG_EXECUTE_IF("ib_log_checkpoint_avoid", goto next;);
 
-			if (n_flushed) {
-				MONITOR_INC_VALUE_CUMULATIVE(
-					MONITOR_FLUSH_ADAPTIVE_TOTAL_PAGE,
-					MONITOR_FLUSH_ADAPTIVE_COUNT,
-					MONITOR_FLUSH_ADAPTIVE_PAGES,
-					n_flushed);
-			}
-		} else {
-			n_flushed = 0;
-		}
+        if (!recv_recovery_is_on() && srv_operation == SRV_OPERATION_NORMAL)
+          log_checkpoint();
+      }
+    }
+    else if (ulint n= page_cleaner_flush_pages_recommendation(last_pages))
+    {
+      page_cleaner.flush_pass++;
+      const ulint tm= ut_time_ms();
+      last_pages= n_flushed= buf_flush_lists(n, LSN_MAX);
+      page_cleaner.flush_time+= ut_time_ms() - tm;
 
-		if (!n_flushed) {
-			next_time = curr_time + 1000;
-		}
+      if (n_flushed)
+      {
+        MONITOR_INC_VALUE_CUMULATIVE(MONITOR_FLUSH_ADAPTIVE_TOTAL_PAGE,
+                                     MONITOR_FLUSH_ADAPTIVE_COUNT,
+                                     MONITOR_FLUSH_ADAPTIVE_PAGES,
+                                     n_flushed);
+        goto do_checkpoint;
+      }
+    }
 
-		ut_d(buf_flush_page_cleaner_disabled_loop());
-	}
+#ifdef UNIV_DEBUG
+    while (innodb_page_cleaner_disabled_debug && !buf_flush_sync_lsn &&
+           srv_shutdown_state == SRV_SHUTDOWN_NONE)
+      os_thread_sleep(100000);
+#endif /* UNIV_DEBUG */
 
-	if (srv_fast_shutdown != 2) {
-		buf_flush_wait_batch_end_acquiring_mutex(true);
-		buf_flush_wait_batch_end_acquiring_mutex(false);
-	}
+#ifndef DBUG_OFF
+next:
+#endif /* !DBUG_OFF */
+    mysql_mutex_lock(&buf_pool.flush_list_mutex);
+  }
 
-	mysql_mutex_lock(&buf_pool.flush_list_mutex);
-	if (buf_flush_sync_lsn.load(std::memory_order_relaxed)) {
-		mysql_mutex_unlock(&buf_pool.flush_list_mutex);
-		goto retry;
-	}
-	buf_page_cleaner_is_active = false;
-	mysql_mutex_unlock(&buf_pool.flush_list_mutex);
+  mysql_mutex_unlock(&buf_pool.flush_list_mutex);
 
-	my_thread_end();
-	/* We count the number of threads in os_thread_exit(). A created
-	thread should always use that to exit and not use return() to exit. */
-	os_thread_exit();
+  if (srv_fast_shutdown != 2)
+  {
+    buf_flush_wait_batch_end_acquiring_mutex(true);
+    buf_flush_wait_batch_end_acquiring_mutex(false);
+  }
 
-	OS_THREAD_DUMMY_RETURN;
+  mysql_mutex_lock(&buf_pool.flush_list_mutex);
+  lsn_limit= buf_flush_sync_lsn;
+  if (UNIV_UNLIKELY(lsn_limit != 0))
+    goto furious_flush;
+  buf_page_cleaner_is_active= false;
+  mysql_mutex_unlock(&buf_pool.flush_list_mutex);
+
+  my_thread_end();
+  /* We count the number of threads in os_thread_exit(). A created
+  thread should always use that to exit and not use return() to exit. */
+  os_thread_exit();
+
+  OS_THREAD_DUMMY_RETURN;
 }
-
 
 /** Initialize page_cleaner. */
 void buf_flush_page_cleaner_init()
 {
   ut_ad(!buf_page_cleaner_is_active);
-  buf_flush_sync_lsn.store(0, std::memory_order_relaxed);
+  buf_flush_sync_lsn= 0;
   buf_page_cleaner_is_active= true;
   os_thread_create(buf_flush_page_cleaner);
 }

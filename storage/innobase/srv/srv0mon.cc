@@ -1146,11 +1146,6 @@ static monitor_info_t	innodb_counter_info[] =
 	 MONITOR_NONE,
 	 MONITOR_DEFAULT_START, MONITOR_SRV_DICT_LRU_EVICT_COUNT_IDLE},
 
-	{"innodb_checkpoint_usec", "server",
-	 "Time (in microseconds) spent by master thread to do checkpoint",
-	 MONITOR_NONE,
-	 MONITOR_DEFAULT_START, MONITOR_SRV_CHECKPOINT_MICROSECOND},
-
 	{"innodb_dblwr_writes", "server",
 	 "Number of doublewrite operations that have been performed"
 	 " (innodb_dblwr_writes)",

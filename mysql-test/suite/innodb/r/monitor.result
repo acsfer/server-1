@@ -206,7 +206,6 @@ innodb_log_flush_usec	disabled
 innodb_dict_lru_usec	disabled
 innodb_dict_lru_count_active	disabled
 innodb_dict_lru_count_idle	disabled
-innodb_checkpoint_usec	disabled
 innodb_dblwr_writes	disabled
 innodb_dblwr_pages_written	disabled
 innodb_page_size	disabled

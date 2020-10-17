@@ -1323,12 +1323,9 @@ bool log_checkpoint_low(lsn_t oldest_lsn, lsn_t end_lsn)
 /** Make a checkpoint */
 void log_make_checkpoint()
 {
-	/* Preflush pages synchronously */
-	buf_flush_wait_flushed(LSN_MAX, LSN_MAX);
-
-	while (!log_checkpoint()) {
-		/* Force a checkpoint */
-	}
+  lsn_t lsn= log_sys.get_lsn();
+  buf_flush_wait_flushed(lsn, lsn);
+  while (!log_checkpoint());
 }
 
 /****************************************************************//**

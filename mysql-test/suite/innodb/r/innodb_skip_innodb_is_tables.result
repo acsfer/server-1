@@ -240,7 +240,6 @@ innodb_log_flush_usec	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NU
 innodb_dict_lru_usec	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	counter	Time (in microseconds) spent to process DICT LRU list
 innodb_dict_lru_count_active	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	counter	Number of tables evicted from DICT LRU list in the active loop
 innodb_dict_lru_count_idle	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	counter	Number of tables evicted from DICT LRU list in the idle loop
-innodb_checkpoint_usec	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	counter	Time (in microseconds) spent by master thread to do checkpoint
 innodb_dblwr_writes	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	status_counter	Number of doublewrite operations that have been performed (innodb_dblwr_writes)
 innodb_dblwr_pages_written	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	status_counter	Number of pages that have been written for doublewrite operations (innodb_dblwr_pages_written)
 innodb_page_size	server	0	NULL	NULL	NULL	0	NULL	NULL	NULL	NULL	NULL	NULL	NULL	0	value	InnoDB page size in bytes (innodb_page_size)
