@@ -1979,10 +1979,7 @@ void srv_shutdown_bg_undo_sources()
 		srv_shutdown_state = SRV_SHUTDOWN_INITIATED;
 		fts_optimize_shutdown();
 		dict_stats_shutdown();
-		while (row_get_background_drop_list_len_low()) {
-			srv_inc_activity_count();
-			os_thread_yield();
-		}
+		while (row_drop_tables_for_mysql_in_background());
 		srv_undo_sources = false;
 	}
 }
