@@ -331,6 +331,7 @@ static dberr_t create_log_file(bool create_new_db, lsn_t lsn,
 	log_mutex_exit();
 
 	log_make_checkpoint();
+	log_write_up_to(LSN_MAX, true);
 
 	return DB_SUCCESS;
 }
