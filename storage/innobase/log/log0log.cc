@@ -76,23 +76,6 @@ static time_t	log_last_warning_time;
 #define LOG_BUF_FLUSH_MARGIN	(LOG_BUF_WRITE_MARGIN		\
 				 + (4U << srv_page_size_shift))
 
-/** Return the oldest modified LSN in buf_pool.flush_list,
-or the latest LSN if all pages are clean.
-@param lsn  log_sys.get_lsn()
-@return LSN of oldest modification */
-static lsn_t log_buf_pool_get_oldest_modification(lsn_t lsn)
-{
-  ut_ad(log_mutex_own());
-  ut_ad(lsn == log_sys.get_lsn());
-  log_flush_order_mutex_enter();
-  mysql_mutex_lock(&buf_pool.flush_list_mutex);
-  const lsn_t oldest_modification= buf_pool.get_oldest_modification(lsn);
-  mysql_mutex_unlock(&buf_pool.flush_list_mutex);
-  log_flush_order_mutex_exit();
-
-  return oldest_modification;
-}
-
 /** Extends the log buffer.
 @param[in]	len	requested minimum size in bytes */
 void log_buffer_extend(ulong len)
@@ -1055,7 +1038,7 @@ ATTRIBUTE_COLD static void log_flush_margin()
 
 /** Write checkpoint info to the log header and invoke log_mutex_exit().
 @param[in]	end_lsn	start LSN of the FILE_CHECKPOINT mini-transaction */
-void log_write_checkpoint_info(lsn_t end_lsn)
+ATTRIBUTE_COLD void log_write_checkpoint_info(lsn_t end_lsn)
 {
 	ut_ad(log_mutex_own());
 	ut_ad(!srv_read_only_mode);
@@ -1123,126 +1106,6 @@ void log_write_checkpoint_info(lsn_t end_lsn)
 	DBUG_EXECUTE_IF("crash_after_checkpoint", DBUG_SUICIDE(););
 
 	log_mutex_exit();
-}
-
-/** Make a checkpoint. Note that this function does not flush dirty
-blocks from the buffer pool: it only checks what is lsn of the oldest
-modification in the pool, and writes information about the lsn in
-log file. Use log_make_checkpoint() to flush also the pool.
-@retval true if the checkpoint was or had been made
-@retval false if a checkpoint write was already running */
-bool log_checkpoint()
-{
-	if (recv_recovery_is_on()) {
-		recv_sys.apply(true);
-	}
-
-	switch (srv_file_flush_method) {
-	case SRV_NOSYNC:
-	case SRV_O_DIRECT_NO_FSYNC:
-		break;
-	default:
-		fil_flush_file_spaces();
-	}
-
-	log_mutex_enter();
-	const lsn_t end_lsn = log_sys.get_lsn();
-	const lsn_t oldest_lsn = log_buf_pool_get_oldest_modification(end_lsn);
-	return log_checkpoint_low(oldest_lsn, end_lsn);
-}
-
-/** Initiate a log checkpoint, discarding the start of the log.
-@param oldest_lsn   the checkpoint LSN
-@param end_lsn      log_sys.get_lsn()
-@return true if success, false if a checkpoint write was already running */
-bool log_checkpoint_low(lsn_t oldest_lsn, lsn_t end_lsn)
-{
-	ut_ad(!srv_read_only_mode);
-	ut_ad(log_mutex_own());
-	ut_ad(oldest_lsn <= end_lsn);
-	ut_ad(end_lsn == log_sys.get_lsn());
-	ut_ad(oldest_lsn <= log_buf_pool_get_oldest_modification(end_lsn));
-
-	ut_ad(!recv_no_log_write);
-
-	/* Because log also contains headers and dummy log records,
-	log_buf_pool_get_oldest_modification() will return end_lsn
-	if the buffer pool contains no dirty buffers.
-	We must make sure that the log is flushed up to that lsn.
-	If there are dirty buffers in the buffer pool, then our
-	write-ahead-logging algorithm ensures that the log has been
-	flushed up to oldest_lsn. */
-
-	ut_ad(oldest_lsn >= log_sys.last_checkpoint_lsn);
-	if (oldest_lsn
-	    > log_sys.last_checkpoint_lsn + SIZE_OF_FILE_CHECKPOINT) {
-		/* Some log has been written since the previous checkpoint. */
-	} else if (srv_shutdown_state > SRV_SHUTDOWN_INITIATED) {
-		/* MariaDB startup expects the redo log file to be
-		logically empty (not even containing a MLOG_CHECKPOINT record)
-		after a clean shutdown. Perform an extra checkpoint at
-		shutdown. */
-	} else {
-		/* Do nothing, because nothing was logged (other than
-		a FILE_CHECKPOINT marker) since the previous checkpoint. */
-		log_mutex_exit();
-		return(true);
-	}
-	/* Repeat the FILE_MODIFY records after the checkpoint, in
-	case some log records between the checkpoint and log_sys.lsn
-	need them. Finally, write a FILE_CHECKPOINT marker. Redo log
-	apply expects to see a FILE_CHECKPOINT after the checkpoint,
-	except on clean shutdown, where the log will be empty after
-	the checkpoint.
-	It is important that we write out the redo log before any
-	further dirty pages are flushed to the tablespace files.  At
-	this point, because log_mutex_own(), mtr_commit() in other
-	threads will be blocked, and no pages can be added to the
-	flush lists. */
-	lsn_t		flush_lsn	= oldest_lsn;
-	const bool	do_write
-		= srv_shutdown_state <= SRV_SHUTDOWN_INITIATED
-		|| flush_lsn != end_lsn;
-
-	if (fil_names_clear(flush_lsn, do_write)) {
-		flush_lsn = log_sys.get_lsn();
-		ut_ad(flush_lsn >= end_lsn + SIZE_OF_FILE_CHECKPOINT);
-	}
-
-	log_mutex_exit();
-
-	log_write_up_to(flush_lsn, true, true);
-
-	log_mutex_enter();
-
-	ut_ad(log_sys.get_flushed_lsn() >= flush_lsn);
-	ut_ad(flush_lsn >= oldest_lsn);
-
-	if (log_sys.last_checkpoint_lsn >= oldest_lsn) {
-		log_mutex_exit();
-		return(true);
-	}
-
-	if (log_sys.n_pending_checkpoint_writes > 0) {
-		/* A checkpoint write is running */
-		log_mutex_exit();
-
-		return(false);
-	}
-
-	log_sys.next_checkpoint_lsn = oldest_lsn;
-	log_write_checkpoint_info(end_lsn);
-	ut_ad(!log_mutex_own());
-
-	return(true);
-}
-
-/** Make a checkpoint */
-void log_make_checkpoint()
-{
-  lsn_t lsn= log_sys.get_lsn();
-  buf_flush_wait_flushed(lsn, lsn);
-  while (!log_checkpoint());
 }
 
 /****************************************************************//**
@@ -1334,7 +1197,7 @@ static void flush_buffer_pool()
 }
 
 /** Make a checkpoint at the latest lsn on shutdown. */
-void logs_empty_and_mark_files_at_shutdown()
+ATTRIBUTE_COLD void logs_empty_and_mark_files_at_shutdown()
 {
 	lsn_t			lsn;
 	ulint			count = 0;
@@ -1572,6 +1435,9 @@ log_print(
 	log_mutex_enter();
 
 	const lsn_t lsn= log_sys.get_lsn();
+	mysql_mutex_lock(&buf_pool.flush_list_mutex);
+	const lsn_t pages_flushed = buf_pool.get_oldest_modification(lsn);
+	mysql_mutex_unlock(&buf_pool.flush_list_mutex);
 
 	fprintf(file,
 		"Log sequence number " LSN_PF "\n"
@@ -1580,7 +1446,7 @@ log_print(
 		"Last checkpoint at  " LSN_PF "\n",
 		lsn,
 		log_sys.get_flushed_lsn(),
-		log_buf_pool_get_oldest_modification(lsn),
+		pages_flushed,
 		log_sys.last_checkpoint_lsn);
 
 	current_time = time(NULL);

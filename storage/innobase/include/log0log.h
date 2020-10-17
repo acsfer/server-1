@@ -138,30 +138,15 @@ void
 log_buffer_flush_to_disk(
 	bool sync = true);
 
-/** Make a checkpoint. Note that this function does not flush dirty
-blocks from the buffer pool: it only checks what is lsn of the oldest
-modification in the pool, and writes information about the lsn in
-log file. Use log_make_checkpoint() to flush also the pool.
-@retval true if the checkpoint was or had been made
-@retval false if a checkpoint write was already running */
-bool log_checkpoint();
-
-/** Initiate a log checkpoint, discarding the start of the log.
-@param oldest_lsn   the checkpoint LSN
-@param end_lsn      log_sys.get_lsn()
-@retval true if the checkpoint was or had been made
-@retval false if a checkpoint write was already running */
-bool log_checkpoint_low(lsn_t oldest_lsn, lsn_t end_lsn);
-
 /** Make a checkpoint */
-void log_make_checkpoint();
+ATTRIBUTE_COLD void log_make_checkpoint();
 
 /** Make a checkpoint at the latest lsn on shutdown. */
-void logs_empty_and_mark_files_at_shutdown();
+ATTRIBUTE_COLD void logs_empty_and_mark_files_at_shutdown();
 
 /** Write checkpoint info to the log header and invoke log_mutex_exit().
 @param[in]	end_lsn	start LSN of the FILE_CHECKPOINT mini-transaction */
-void log_write_checkpoint_info(lsn_t end_lsn);
+ATTRIBUTE_COLD void log_write_checkpoint_info(lsn_t end_lsn);
 
 /**
 Checks that there is enough free space in the log to start a new query step.
