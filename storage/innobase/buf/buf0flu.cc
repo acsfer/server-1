@@ -1815,26 +1815,11 @@ ATTRIBUTE_COLD static void buf_flush_sync_for_checkpoint(lsn_t lsn)
 /*********************************************************************//**
 Calculates if flushing is required based on number of dirty pages in
 the buffer pool.
+@param dirty_pct      100*flush_list.count / (LRU.count + free.count)
 @return percent of io_capacity to flush to manage dirty page ratio */
-static
-ulint
-af_get_pct_for_dirty()
+static ulint af_get_pct_for_dirty(double dirty_pct)
 {
-	const ulint dirty = UT_LIST_GET_LEN(buf_pool.flush_list);
-	if (!dirty) {
-		/* No pages modified */
-		return 0;
-	}
-
-	/* 1 + is there to avoid division by zero (in case the buffer
-	pool (including the flush_list) was emptied while we are
-	looking at it) */
-	double	dirty_pct = 100 * static_cast<double>(dirty)
-		/ static_cast<double>(1 + UT_LIST_GET_LEN(buf_pool.LRU)
-				      + UT_LIST_GET_LEN(buf_pool.free));
-
-	ut_a(srv_max_dirty_pages_pct_lwm
-	     <= srv_max_buf_pool_modified_pct);
+	ut_ad(srv_max_dirty_pages_pct_lwm <= srv_max_buf_pool_modified_pct);
 
 	if (srv_max_dirty_pages_pct_lwm == 0) {
 		/* The user has not set the option to preflush dirty
@@ -1845,7 +1830,7 @@ af_get_pct_for_dirty()
 			innodb_io_capacity. */
 			return(100);
 		}
-	} else if (dirty_pct >= srv_max_dirty_pages_pct_lwm) {
+	} else {
 		/* We should start flushing pages gradually. */
 		return(static_cast<ulint>((dirty_pct * 100)
 		       / (srv_max_buf_pool_modified_pct + 1)));
@@ -1882,16 +1867,14 @@ af_get_pct_for_lsn(
 		 / 7.5));
 }
 
-/*********************************************************************//**
-This function is called approximately once every second by the
-page_cleaner thread. Based on various factors it decides if there is a
-need to do flushing.
+/** This function is called approximately once every second by the
+page_cleaner thread if innodb_adaptive_flushing=ON.
+Based on various factors it decides if there is a need to do flushing.
 @return number of pages recommended to be flushed
-@param last_pages_in	the number of pages flushed by the last flush_list
-			flushing. */
-static
-ulint
-page_cleaner_flush_pages_recommendation(ulint last_pages_in)
+@param last_pages_in  number of pages flushed in previous batch
+@param dirty_pct      100*flush_list.count / (LRU.count + free.count) */
+static ulint page_cleaner_flush_pages_recommendation(ulint last_pages_in,
+                                                     double dirty_pct)
 {
 	static	lsn_t		prev_lsn = 0;
 	static	ulint		sum_pages = 0;
@@ -1902,21 +1885,19 @@ page_cleaner_flush_pages_recommendation(ulint last_pages_in)
 	ulint			n_pages = 0;
 
 	const lsn_t cur_lsn = log_sys.get_lsn();
+	ulint pct_for_dirty = af_get_pct_for_dirty(dirty_pct);
+	time_t curr_time = time(nullptr);
 
-	if (prev_lsn == 0) {
+	if (!prev_lsn) {
 		/* First time around. */
+		prev_time = curr_time;
 		prev_lsn = cur_lsn;
-		prev_time = time(NULL);
-		return(0);
-	}
-
-	if (prev_lsn == cur_lsn) {
-		return(0);
+		return ulint(double(pct_for_dirty) / 100.0
+			     * double(srv_io_capacity));
 	}
 
 	sum_pages += last_pages_in;
 
-	time_t	curr_time = time(NULL);
 	double	time_elapsed = difftime(curr_time, prev_time);
 
 	/* We update our variables every srv_flushing_avg_loops
@@ -1968,7 +1949,6 @@ page_cleaner_flush_pages_recommendation(ulint last_pages_in)
 
 	const lsn_t age = cur_lsn > oldest_lsn ? cur_lsn - oldest_lsn : 0;
 
-	ulint pct_for_dirty = af_get_pct_for_dirty();
 	ulint pct_for_lsn = af_get_pct_for_lsn(age);
 
 	ulint pct_total = std::max(pct_for_dirty, pct_for_lsn);
@@ -1984,7 +1964,9 @@ page_cleaner_flush_pages_recommendation(ulint last_pages_in)
 		if (b->oldest_modification() > target_lsn) {
 			break;
 		}
-		++pages_for_lsn;
+		if (++pages_for_lsn >= srv_max_io_capacity) {
+			break;
+		}
 	}
 	mysql_mutex_unlock(&buf_pool.flush_list_mutex);
 
@@ -1992,11 +1974,6 @@ page_cleaner_flush_pages_recommendation(ulint last_pages_in)
 	if (pages_for_lsn < 1) {
 		pages_for_lsn = 1;
 	}
-
-	/* Cap the maximum IO capacity that we are going to use by
-	max_io_capacity. Limit the value to avoid too quick increase */
-	pages_for_lsn = std::min<ulint>(
-		pages_for_lsn, srv_max_io_capacity * 2);
 
 	n_pages = (ulint(double(srv_io_capacity) * double(pct_total) / 100.0)
 		   + avg_page_rate + pages_for_lsn) / 3;
@@ -2061,6 +2038,8 @@ static os_thread_ret_t DECLARE_THREAD(buf_flush_page_cleaner)(void*)
     {
 furious_flush:
       buf_flush_sync_for_checkpoint(lsn_limit);
+      last_pages= 0;
+      set_timespec(abstime, 1);
       continue;
     }
 
@@ -2069,6 +2048,7 @@ furious_flush:
 
     mysql_cond_timedwait(&buf_pool.do_flush_list, &buf_pool.flush_list_mutex,
                          &abstime);
+    set_timespec(abstime, 1);
 
     lsn_limit= buf_flush_sync_lsn;
 
@@ -2078,8 +2058,21 @@ furious_flush:
     if (srv_shutdown_state > SRV_SHUTDOWN_INITIATED)
       break;
 
+    const ulint dirty_blocks= UT_LIST_GET_LEN(buf_pool.flush_list);
+
+    if (!dirty_blocks)
+      continue;
+
+    /* We perform dirty reads of the LRU+free list lengths here.
+    Division by zero is not possible, because buf_pool.flush_list is
+    guaranteed to be nonempty, and it is a subset of buf_pool.LRU. */
+    const double dirty_pct= double(dirty_blocks) * 100.0 /
+      double(UT_LIST_GET_LEN(buf_pool.LRU) + UT_LIST_GET_LEN(buf_pool.free));
+
+    if (dirty_pct < srv_max_dirty_pages_pct_lwm)
+      continue;
+
     mysql_mutex_unlock(&buf_pool.flush_list_mutex);
-    set_timespec(abstime, 1);
 
     ulint n_flushed;
 
@@ -2105,7 +2098,8 @@ do_checkpoint:
           log_checkpoint();
       }
     }
-    else if (ulint n= page_cleaner_flush_pages_recommendation(last_pages))
+    else if (ulint n= page_cleaner_flush_pages_recommendation(last_pages,
+                                                              dirty_pct))
     {
       page_cleaner.flush_pass++;
       const ulint tm= ut_time_ms();
